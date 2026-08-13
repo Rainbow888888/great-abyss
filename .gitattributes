@@ -1,0 +1,13 @@
+# Normalize line endings, keep Godot binary/text formats intact
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ogg binary
+*.wav binary
+*.mp3 binary
+*.ttf binary
+*.otf binary
+
+*.import linguist-generated

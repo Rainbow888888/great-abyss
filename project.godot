@@ -3,7 +3,7 @@
 ; since the parameters that go here are not all obvious.
 ;
 ; Format:
-;   [section] ; section goes to the same key/value pair as in the DB
+;   [section] ; section goes between []
 ;   param=value ; assign values to parameters
 
 config_version=5
@@ -12,7 +12,6 @@ config_version=5
 
 config/name="Great Abyss"
 config/description="Idle/incremental-игра на одном центральном объекте — Великой Бездне."
-run/main_scene=""
 config/features=PackedStringArray("4.7", "Forward Plus")
 
 [rendering]

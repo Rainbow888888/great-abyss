@@ -12,6 +12,7 @@ config_version=5
 
 config/name="Great Abyss"
 config/description="Idle/incremental-игра на одном центральном объекте — Великой Бездне."
+run/main_scene="uid://c8n2xk4tq7wvj"
 config/features=PackedStringArray("4.7", "Forward Plus")
 
 [rendering]

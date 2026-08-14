@@ -22,3 +22,7 @@ Thumbs.db
 
 # Raw reference materials (chat exports, drafts) — not for the public repo
 /materials/
+
+# Local tooling and build output (not for the public repo)
+/tools/
+/build/

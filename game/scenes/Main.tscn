@@ -42,3 +42,12 @@ offset_top = 56.0
 offset_right = 160.0
 offset_bottom = 88.0
 text = "Бросить"
+
+[node name="GruhrPassive" type="Polygon2D" parent="."]
+position = Vector2(330, 380)
+color = Color(0.5, 0.75, 0.75, 1)
+polygon = PackedVector2Array(20.000, 0.000, 17.320, 10.000, 10.000, 17.320, 0.000, 20.000, -10.000, 17.320, -17.320, 10.000, -20.000, 0.000, -17.320, -10.000, -10.000, -17.320, 0.000, -20.000, 10.000, -17.320, 17.320, -10.000)
+
+[node name="PassiveTimer" type="Timer" parent="."]
+wait_time = 3.0
+autostart = true

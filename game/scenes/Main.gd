@@ -51,6 +51,7 @@ var _gruhr_passive_base_y: float
 var _passive_stats := preload("res://game/resources/PassiveGruhrStats.tres")
 var _abyss_stats := preload("res://game/resources/AbyssStats.tres")
 var _gruhr_stats := preload("res://game/resources/GruhrStats.tres")
+var _chronicle_entries: Resource = preload("res://game/resources/ChronicleEntries.tres")
 
 ## Лежащие на поверхности осколки, ждущие носильщика.
 var _dropped_materials: Array[Polygon2D] = []
@@ -192,10 +193,7 @@ func _throw_carried() -> void:
 	material_count += 1
 	_material_label.text = "В Бездне: %d" % material_count
 	print("Брошено в Бездну: ", material_count)
-	# Летописец: первая запись — первое подношение Бездне. Один раз,
-	# без ротации и базы событий (T0010).
-	if material_count == 1:
-		_chronicle_label.visible = true
+	_check_chronicle()
 	var landing := Vector2(_bezdna.position.x - 40.0, _bezdna.position.y + _zasypka_top_y())
 	var tween := create_tween()
 	tween.set_parallel(true)
@@ -204,6 +202,28 @@ func _throw_carried() -> void:
 	tween.finished.connect(item.queue_free)
 	_pulse_bezdna()
 	_update_zasypka()
+
+## Летописец: проходим по записям и показываем первую сработавшую.
+## Пороги и текст в .tres (ChronicleEntries.tres) — не в коде.
+func _check_chronicle() -> void:
+	for entry in _chronicle_entries.entries:
+		if _chronicle_hit(entry):
+			_chronicle_label.text = entry.text
+			_chronicle_label.visible = true
+			return
+
+## Числа совпадают с enum ChronicleEntry.Trigger: 0 = первое подношение,
+## 1 = N-й материал, 2 = половина ёмкости. Хардкод допустим — enum и
+## ресурс меняются вместе в одном файле.
+func _chronicle_hit(entry: Resource) -> bool:
+	match entry.trigger:
+		0:
+			return material_count == 1
+		1:
+			return material_count == entry.threshold
+		2:
+			return material_count == _abyss_stats.capacity / 2
+	return false
 
 ## Уровень засыпки: главный видимый прогресс игры. Форма берётся
 ## из самой полости Бездны, чтобы засыпка ложилась по её стенкам,

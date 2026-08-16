@@ -15,8 +15,12 @@ extends Node2D
 
 const MATERIAL_SCENE := preload("res://game/scenes/Material.tscn")
 
-## Уровень «земли», на который падает добытый материал.
-const GROUND_Y := 470.0
+## Линия поверхности в разрезе (ADR-003). Всё, что стоит на земле,
+## стоит на ней; ниже — массив земли и полость Бездны.
+const SURFACE_Y := 280.0
+
+## Куда ложится добытый материал: нижней гранью на поверхность.
+const GROUND_Y := SURFACE_Y - 6.0
 
 var material_count := 0
 

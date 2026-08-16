@@ -7,6 +7,8 @@ extends Node2D
 ## накопленный материал, Бездна коротко пульсирует.
 ## T0006 — Пассивный Грухр: второй Грухр сам добавляет материал раз
 ## в фиксированный интервал, без клика игрока.
+## T0007 — интервал и величина прироста пассивного Грухра вынесены
+## в ресурс `PassiveGruhrStats.tres` (Data-Driven).
 ## Клик по «Источнику» даёт +1 материал (переменная состояния),
 ## печатает в консоль и обновляет debug-label. Без HP и анимаций.
 
@@ -21,6 +23,7 @@ var material_count := 0
 
 var _gruhr_base_y: float
 var _gruhr_passive_base_y: float
+var _passive_stats := preload("res://game/resources/PassiveGruhrStats.tres")
 
 func _ready() -> void:
 	$Istochnik.input_event.connect(_on_istochnik_input_event)
@@ -28,6 +31,8 @@ func _ready() -> void:
 	_passive_timer.timeout.connect(_on_passive_timer_timeout)
 	_gruhr_base_y = _gruhr.position.y
 	_gruhr_passive_base_y = _gruhr_passive.position.y
+	_passive_timer.wait_time = _passive_stats.interval
+	_passive_timer.start()
 
 func _on_istochnik_input_event(_viewport: Node, event: InputEvent, _shape_idx: int) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
@@ -45,7 +50,7 @@ func _on_throw_button_pressed() -> void:
 	_pulse_bezdna()
 
 func _on_passive_timer_timeout() -> void:
-	material_count += 1
+	material_count += _passive_stats.material_amount
 	_material_label.text = "Материал: %d" % material_count
 	print("Материал (пассивно): ", material_count)
 	_jump(_gruhr_passive, _gruhr_passive_base_y)

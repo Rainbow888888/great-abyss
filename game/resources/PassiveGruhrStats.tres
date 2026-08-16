@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="PassiveGruhrStats" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/resources/PassiveGruhrStats.gd" id="1_stats"]
+
+[resource]
+script = ExtResource("1_stats")
+interval = 3.0
+material_amount = 1

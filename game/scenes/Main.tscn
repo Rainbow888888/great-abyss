@@ -50,4 +50,3 @@ polygon = PackedVector2Array(20.000, 0.000, 17.320, 10.000, 10.000, 17.320, 0.00
 
 [node name="PassiveTimer" type="Timer" parent="."]
 wait_time = 3.0
-autostart = true

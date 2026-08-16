@@ -2,12 +2,14 @@ extends Node2D
 
 ## Прототип светлого экрана.
 ##
-## Цикл: клик по Шахте или тик пассивного Грухра роняет объект-материал
-## на поверхность → Грухр-носильщик подбирает его, несёт к краю Бездны
+## Цикл: клик по Священному Монолиту или молитва пассивного Грухра
+## выбивает осколок материала, который падает на поверхность → Грухр-
+## носильщик подхватывает его силой мысли, несёт к краю Бездны
 ## и сбрасывает → счётчик растёт, Бездна пульсирует.
 ##
-## Шахта — первый источник засыпания, наземная постройка
-## (`docs/03_Gameplay/FillSources.md`). Вид — разрез сбоку (ADR-003).
+## Монолит — первый источник засыпания, Первокамень
+## (`docs/03_Gameplay/FillSources.md`). Светлые не копают землю —
+## они выбивают материал верой и молитвой. Вид — разрез сбоку (ADR-003).
 
 const MATERIAL_SCENE := preload("res://game/scenes/Material.tscn")
 
@@ -15,7 +17,7 @@ const MATERIAL_SCENE := preload("res://game/scenes/Material.tscn")
 ## стоит на ней; ниже — массив земли и полость Бездны.
 const SURFACE_Y := 280.0
 
-## Куда ложится добытый материал: нижней гранью на поверхность.
+## Куда ложится выбитый молитвой осколок: нижней гранью на поверхность.
 const GROUND_Y := SURFACE_Y - 6.0
 
 ## Куда носильщик доходит, чтобы сбросить груз: у левой кромки зева.
@@ -32,7 +34,7 @@ enum CarryState { IDLE, TO_MATERIAL, TO_ABYSS }
 var material_count := 0
 
 @onready var _material_label: Label = $MaterialLabel
-@onready var _shahta: Area2D = $Shahta
+@onready var _monolit: Area2D = $Monolit
 @onready var _gruhr: Polygon2D = $Gruhr
 @onready var _gruhr_passive: Polygon2D = $GruhrPassive
 @onready var _bezdna: Polygon2D = $Bezdna
@@ -44,7 +46,7 @@ var _passive_stats := preload("res://game/resources/PassiveGruhrStats.tres")
 var _abyss_stats := preload("res://game/resources/AbyssStats.tres")
 var _gruhr_stats := preload("res://game/resources/GruhrStats.tres")
 
-## Лежащие на поверхности объекты-материалы, ждущие носильщика.
+## Лежащие на поверхности осколки, ждущие носильщика.
 var _dropped_materials: Array[Polygon2D] = []
 
 var _carry_state: CarryState = CarryState.IDLE
@@ -52,7 +54,7 @@ var _target_material: Polygon2D = null
 var _carried: Polygon2D = null
 
 func _ready() -> void:
-	_shahta.input_event.connect(_on_shahta_input_event)
+	_monolit.input_event.connect(_on_monolit_input_event)
 	_passive_timer.timeout.connect(_on_passive_timer_timeout)
 	_gruhr_passive_base_y = _gruhr_passive.position.y
 	_passive_timer.wait_time = _passive_stats.interval
@@ -107,21 +109,21 @@ func load_game() -> void:
 		return
 	material_count = int(data.get("material_count", 0))
 	for i in int(data.get("lying_materials", 0)):
-		_drop_material(_shahta.position, false)
+		_drop_material(_monolit.position, false)
 	print("Загружено: брошено ", material_count, ", лежит ", _dropped_materials.size())
 
-func _on_shahta_input_event(_viewport: Node, event: InputEvent, _shape_idx: int) -> void:
+func _on_monolit_input_event(_viewport: Node, event: InputEvent, _shape_idx: int) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		_drop_material(_shahta.position)
+		_drop_material(_monolit.position)
 
 func _on_passive_timer_timeout() -> void:
 	for i in _passive_stats.material_amount:
-		_drop_material(_gruhr_passive.position)
+		_drop_material(_monolit.position)
 	_jump(_gruhr_passive, _gruhr_passive_base_y)
 
-## Роняет объект-материал из точки добычи на землю, с разбросом в сторону
-## Бездны: куча складывается сбоку от постройки, а не под ней, иначе её
-## не видно — а куча и есть видимый сигнал узкого места.
+## Роняет осколок из точки добычи (у Монолита) на землю, с разбросом в
+## сторону Бездны: куча складывается сбоку от Первокамня, а не под ним,
+## иначе её не видно — а куча и есть видимый сигнал узкого места.
 func _drop_material(from: Vector2, animate: bool = true) -> void:
 	var item: Polygon2D = MATERIAL_SCENE.instantiate()
 	item.position = from

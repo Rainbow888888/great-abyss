@@ -22,6 +22,10 @@ Thumbs.db
 
 # Raw reference materials (chat exports, drafts) — not for the public repo
 /materials/
+*.docx
+
+# Freebuff local state
+.freebuff/
 
 # Local tooling and build output (not for the public repo)
 /tools/

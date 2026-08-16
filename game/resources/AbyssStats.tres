@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="AbyssStats" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/resources/AbyssStats.gd" id="1_abyss"]
+
+[resource]
+script = ExtResource("1_abyss")
+capacity = 60

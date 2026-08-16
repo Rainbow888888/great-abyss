@@ -18,6 +18,9 @@ position = Vector2(760, 280)
 color = Color(0.05, 0.05, 0.08, 1)
 polygon = PackedVector2Array(-152.000, 0.000, -146.000, 40.000, -138.000, 90.000, -130.000, 150.000, -122.000, 220.000, -115.000, 300.000, -110.000, 368.000, 108.000, 368.000, 114.000, 300.000, 121.000, 220.000, 129.000, 150.000, 137.000, 90.000, 144.000, 40.000, 148.000, 0.000)
 
+[node name="Zasypka" type="Polygon2D" parent="Bezdna"]
+color = Color(0.6, 0.58, 0.52, 1)
+
 [node name="Shahta" type="Area2D" parent="."]
 position = Vector2(250, 244)
 input_pickable = true

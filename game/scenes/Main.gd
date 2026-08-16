@@ -33,10 +33,12 @@ var material_count := 0
 @onready var _gruhr: Polygon2D = $Gruhr
 @onready var _gruhr_passive: Polygon2D = $GruhrPassive
 @onready var _bezdna: Polygon2D = $Bezdna
+@onready var _zasypka: Polygon2D = $Bezdna/Zasypka
 @onready var _passive_timer: Timer = $PassiveTimer
 
 var _gruhr_passive_base_y: float
 var _passive_stats := preload("res://game/resources/PassiveGruhrStats.tres")
+var _abyss_stats := preload("res://game/resources/AbyssStats.tres")
 
 ## Лежащие на поверхности объекты-материалы, ждущие носильщика.
 var _dropped_materials: Array[Polygon2D] = []
@@ -51,6 +53,7 @@ func _ready() -> void:
 	_gruhr_passive_base_y = _gruhr_passive.position.y
 	_passive_timer.wait_time = _passive_stats.interval
 	_passive_timer.start()
+	_update_zasypka()
 
 func _on_shahta_input_event(_viewport: Node, event: InputEvent, _shape_idx: int) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
@@ -115,12 +118,68 @@ func _throw_carried() -> void:
 	material_count += 1
 	_material_label.text = "В Бездне: %d" % material_count
 	print("Брошено в Бездну: ", material_count)
+	var landing := Vector2(_bezdna.position.x - 40.0, _bezdna.position.y + _zasypka_top_y())
 	var tween := create_tween()
 	tween.set_parallel(true)
-	tween.tween_property(item, "position", Vector2(720.0, 560.0), 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tween.tween_property(item, "position", landing, 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tween.tween_property(item, "scale", Vector2.ZERO, 0.5)
 	tween.finished.connect(item.queue_free)
 	_pulse_bezdna()
+	_update_zasypka()
+
+## Уровень засыпки: главный видимый прогресс игры. Форма берётся
+## из самой полости Бездны, чтобы засыпка ложилась по её стенкам,
+## а не торчала прямоугольником. Один цвет; слои по типам материала
+## ждут появления самих типов (`docs/02_World/Abyss.md`).
+func _update_zasypka() -> void:
+	if material_count <= 0:
+		_zasypka.polygon = PackedVector2Array()
+		return
+	var sides := _shaft_sides()
+	var left: PackedVector2Array = sides[0]
+	var right: PackedVector2Array = sides[1]
+	var top_y := _zasypka_top_y()
+	var poly := PackedVector2Array()
+	poly.append(Vector2(_interp_x(left, top_y), top_y))
+	for p in left:
+		if p.y > top_y:
+			poly.append(p)
+	for i in range(right.size() - 1, -1, -1):
+		if right[i].y > top_y:
+			poly.append(right[i])
+	poly.append(Vector2(_interp_x(right, top_y), top_y))
+	_zasypka.polygon = poly
+
+## Глубина верхней кромки засыпки в координатах Бездны.
+func _zasypka_top_y() -> float:
+	var bottom_y: float = _shaft_sides()[0][_bezdna.polygon.size() / 2 - 1].y
+	var filled := clampf(float(material_count) / float(_abyss_stats.capacity), 0.0, 1.0)
+	return bottom_y - bottom_y * filled
+
+## Разбивает контур Бездны на левую и правую стенки, обе — сверху вниз.
+func _shaft_sides() -> Array:
+	var pts := _bezdna.polygon
+	var half := pts.size() / 2
+	var left := PackedVector2Array()
+	var right := PackedVector2Array()
+	for i in pts.size():
+		if i < half:
+			left.append(pts[i])
+		else:
+			right.append(pts[i])
+	right.reverse()
+	return [left, right]
+
+## Горизонтальная координата стенки на заданной глубине.
+func _interp_x(profile: PackedVector2Array, y: float) -> float:
+	if y <= profile[0].y:
+		return profile[0].x
+	for i in range(1, profile.size()):
+		if y <= profile[i].y:
+			var a := profile[i - 1]
+			var b := profile[i]
+			return lerpf(a.x, b.x, (y - a.y) / (b.y - a.y))
+	return profile[profile.size() - 1].x
 
 func _jump(node: Polygon2D, base_y: float) -> void:
 	var tween := create_tween()

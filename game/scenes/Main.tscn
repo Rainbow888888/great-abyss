@@ -51,3 +51,6 @@ text = "В Бездне: 0"
 
 [node name="PassiveTimer" type="Timer" parent="."]
 wait_time = 3.0
+
+[node name="AutosaveTimer" type="Timer" parent="."]
+wait_time = 10.0

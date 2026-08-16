@@ -29,6 +29,10 @@ const SAVE_PATH := "user://save.json"
 ## версии отбрасывается — начинается новая игра.
 const SAVE_VERSION := 1
 
+## Интервал автосейва. Технический параметр (частота записи), а не
+## баланс игры, поэтому константа в коде, а не в `.tres`.
+const AUTOSAVE_INTERVAL := 10.0
+
 enum CarryState { IDLE, TO_MATERIAL, TO_ABYSS }
 
 var material_count := 0
@@ -40,6 +44,7 @@ var material_count := 0
 @onready var _bezdna: Polygon2D = $Bezdna
 @onready var _zasypka: Polygon2D = $Bezdna/Zasypka
 @onready var _passive_timer: Timer = $PassiveTimer
+@onready var _autosave_timer: Timer = $AutosaveTimer
 
 var _gruhr_passive_base_y: float
 var _passive_stats := preload("res://game/resources/PassiveGruhrStats.tres")
@@ -56,9 +61,12 @@ var _carried: Polygon2D = null
 func _ready() -> void:
 	_monolit.input_event.connect(_on_monolit_input_event)
 	_passive_timer.timeout.connect(_on_passive_timer_timeout)
+	_autosave_timer.timeout.connect(_on_autosave_timer_timeout)
 	_gruhr_passive_base_y = _gruhr_passive.position.y
 	_passive_timer.wait_time = _passive_stats.interval
 	_passive_timer.start()
+	_autosave_timer.wait_time = AUTOSAVE_INTERVAL
+	_autosave_timer.start()
 	load_game()
 	_material_label.text = "В Бездне: %d" % material_count
 	_update_zasypka()
@@ -120,6 +128,11 @@ func _on_passive_timer_timeout() -> void:
 	for i in _passive_stats.material_amount:
 		_drop_material(_monolit.position)
 	_jump(_gruhr_passive, _gruhr_passive_base_y)
+
+## Автосейв по таймеру: не терять прогресс при падении игры или
+## выключении машины, а не только при честном закрытии окна.
+func _on_autosave_timer_timeout() -> void:
+	save_game()
 
 ## Роняет осколок из точки добычи (у Монолита) на землю, с разбросом в
 ## сторону Бездны: куча складывается сбоку от Первокамня, а не под ним,

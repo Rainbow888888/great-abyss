@@ -9,12 +9,19 @@ extends Node2D
 ## в фиксированный интервал, без клика игрока.
 ## T0007 — интервал и величина прироста пассивного Грухра вынесены
 ## в ресурс `PassiveGruhrStats.tres` (Data-Driven).
-## Клик по «Источнику» даёт +1 материал (переменная состояния),
-## печатает в консоль и обновляет debug-label. Без HP и анимаций.
+## T0007.5 — материал стал физическим объектом: добыча роняет фигуру
+## на землю, счётчик не растёт (оживёт в T0007.6, когда появится
+## переноска). См. `docs/05_References/DesignReferences.md`.
+
+const MATERIAL_SCENE := preload("res://game/scenes/Material.tscn")
+
+## Уровень «земли», на который падает добытый материал.
+const GROUND_Y := 470.0
 
 var material_count := 0
 
 @onready var _material_label: Label = $MaterialLabel
+@onready var _istochnik: Area2D = $Istochnik
 @onready var _gruhr: Polygon2D = $Gruhr
 @onready var _gruhr_passive: Polygon2D = $GruhrPassive
 @onready var _bezdna: Polygon2D = $Bezdna
@@ -25,8 +32,11 @@ var _gruhr_base_y: float
 var _gruhr_passive_base_y: float
 var _passive_stats := preload("res://game/resources/PassiveGruhrStats.tres")
 
+## Лежащие на земле объекты-материалы. Переноской займётся T0007.6.
+var _dropped_materials: Array[Polygon2D] = []
+
 func _ready() -> void:
-	$Istochnik.input_event.connect(_on_istochnik_input_event)
+	_istochnik.input_event.connect(_on_istochnik_input_event)
 	_throw_button.pressed.connect(_on_throw_button_pressed)
 	_passive_timer.timeout.connect(_on_passive_timer_timeout)
 	_gruhr_base_y = _gruhr.position.y
@@ -36,24 +46,35 @@ func _ready() -> void:
 
 func _on_istochnik_input_event(_viewport: Node, event: InputEvent, _shape_idx: int) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		material_count += 1
-		_material_label.text = "Материал: %d" % material_count
-		print("Материал: ", material_count)
+		_drop_material(_istochnik.position)
 		_jump(_gruhr, _gruhr_base_y)
 
 func _on_throw_button_pressed() -> void:
 	if material_count <= 0:
 		return
 	material_count = 0
-	_material_label.text = "Материал: %d" % material_count
+	_material_label.text = "В Бездне: %d" % material_count
 	print("Бросок в Бездну")
 	_pulse_bezdna()
 
 func _on_passive_timer_timeout() -> void:
-	material_count += _passive_stats.material_amount
-	_material_label.text = "Материал: %d" % material_count
-	print("Материал (пассивно): ", material_count)
+	for i in _passive_stats.material_amount:
+		_drop_material(_gruhr_passive.position)
 	_jump(_gruhr_passive, _gruhr_passive_base_y)
+
+## Роняет объект-материал из точки добычи на землю, с небольшим разбросом,
+## чтобы объекты складывались в кучу, а не в столбик.
+func _drop_material(from: Vector2) -> void:
+	var item: Polygon2D = MATERIAL_SCENE.instantiate()
+	item.position = from
+	add_child(item)
+	_dropped_materials.append(item)
+	print("Материала на земле: ", _dropped_materials.size())
+	var target_x := from.x + randf_range(-45.0, 45.0)
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(item, "position:x", target_x, 0.35)
+	tween.tween_property(item, "position:y", GROUND_Y, 0.35).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 
 func _jump(node: Polygon2D, base_y: float) -> void:
 	var tween := create_tween()

@@ -49,6 +49,17 @@ offset_right = 220.0
 offset_bottom = 48.0
 text = "В Бездне: 0"
 
+[node name="ChronicleLabel" type="Label" parent="."]
+visible = false
+offset_left = 276.0
+offset_top = 604.0
+offset_right = 876.0
+offset_bottom = 636.0
+theme_override_colors/font_color = Color(0.85, 0.83, 0.72, 1)
+theme_override_font_sizes/font_size = 16
+horizontal_alignment = 1
+text = "Сегодня в Бездну впервые что-то упало. Она не поблагодарила."
+
 [node name="PassiveTimer" type="Timer" parent="."]
 wait_time = 3.0
 

@@ -38,6 +38,7 @@ enum CarryState { IDLE, TO_MATERIAL, TO_ABYSS }
 var material_count := 0
 
 @onready var _material_label: Label = $MaterialLabel
+@onready var _chronicle_label: Label = $ChronicleLabel
 @onready var _monolit: Area2D = $Monolit
 @onready var _gruhr: Polygon2D = $Gruhr
 @onready var _gruhr_passive: Polygon2D = $GruhrPassive
@@ -191,6 +192,10 @@ func _throw_carried() -> void:
 	material_count += 1
 	_material_label.text = "В Бездне: %d" % material_count
 	print("Брошено в Бездну: ", material_count)
+	# Летописец: первая запись — первое подношение Бездне. Один раз,
+	# без ротации и базы событий (T0010).
+	if material_count == 1:
+		_chronicle_label.visible = true
 	var landing := Vector2(_bezdna.position.x - 40.0, _bezdna.position.y + _zasypka_top_y())
 	var tween := create_tween()
 	tween.set_parallel(true)

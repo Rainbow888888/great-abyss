@@ -21,9 +21,6 @@ const GROUND_Y := SURFACE_Y - 6.0
 ## Куда носильщик доходит, чтобы сбросить груз: у левой кромки зева.
 const THROW_X := 590.0
 
-## Скорость носильщика, пикселей в секунду.
-const CARRY_SPEED := 220.0
-
 enum CarryState { IDLE, TO_MATERIAL, TO_ABYSS }
 
 var material_count := 0
@@ -39,6 +36,7 @@ var material_count := 0
 var _gruhr_passive_base_y: float
 var _passive_stats := preload("res://game/resources/PassiveGruhrStats.tres")
 var _abyss_stats := preload("res://game/resources/AbyssStats.tres")
+var _gruhr_stats := preload("res://game/resources/GruhrStats.tres")
 
 ## Лежащие на поверхности объекты-материалы, ждущие носильщика.
 var _dropped_materials: Array[Polygon2D] = []
@@ -104,7 +102,7 @@ func _process(delta: float) -> void:
 ## Двигает носильщика к цели по горизонтали. true — дошёл.
 func _step_toward(target_x: float, delta: float) -> bool:
 	var dx := target_x - _gruhr.position.x
-	var step := CARRY_SPEED * delta
+	var step := _gruhr_stats.carry_speed * delta
 	if absf(dx) <= step:
 		_gruhr.position.x = target_x
 		return true

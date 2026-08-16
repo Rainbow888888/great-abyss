@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="GruhrStats" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/resources/GruhrStats.gd" id="1_gruhr"]
+
+[resource]
+script = ExtResource("1_gruhr")
+carry_speed = 110.0

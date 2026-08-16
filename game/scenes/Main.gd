@@ -1,17 +1,13 @@
 extends Node2D
 
-## T0003 — Источник материала и клик.
-## T0004 — Первый Грухр: статичная фигура рядом с Источником,
-## коротко подпрыгивает при клике по Источнику.
-## T0005 — Бросок материала в Бездну: кнопка «Бросить» тратит весь
-## накопленный материал, Бездна коротко пульсирует.
-## T0006 — Пассивный Грухр: второй Грухр сам добавляет материал раз
-## в фиксированный интервал, без клика игрока.
-## T0007 — интервал и величина прироста пассивного Грухра вынесены
-## в ресурс `PassiveGruhrStats.tres` (Data-Driven).
-## T0007.5 — материал стал физическим объектом: добыча роняет фигуру
-## на землю, счётчик не растёт (оживёт в T0007.6, когда появится
-## переноска). См. `docs/05_References/DesignReferences.md`.
+## Прототип светлого экрана.
+##
+## Цикл: клик по Шахте или тик пассивного Грухра роняет объект-материал
+## на поверхность → Грухр-носильщик подбирает его, несёт к краю Бездны
+## и сбрасывает → счётчик растёт, Бездна пульсирует.
+##
+## Шахта — первый источник засыпания, наземная постройка
+## (`docs/03_Gameplay/FillSources.md`). Вид — разрез сбоку (ADR-003).
 
 const MATERIAL_SCENE := preload("res://game/scenes/Material.tscn")
 
@@ -22,63 +18,109 @@ const SURFACE_Y := 280.0
 ## Куда ложится добытый материал: нижней гранью на поверхность.
 const GROUND_Y := SURFACE_Y - 6.0
 
+## Куда носильщик доходит, чтобы сбросить груз: у левой кромки зева.
+const THROW_X := 590.0
+
+## Скорость носильщика, пикселей в секунду.
+const CARRY_SPEED := 220.0
+
+enum CarryState { IDLE, TO_MATERIAL, TO_ABYSS }
+
 var material_count := 0
 
 @onready var _material_label: Label = $MaterialLabel
-@onready var _istochnik: Area2D = $Istochnik
+@onready var _shahta: Area2D = $Shahta
 @onready var _gruhr: Polygon2D = $Gruhr
 @onready var _gruhr_passive: Polygon2D = $GruhrPassive
 @onready var _bezdna: Polygon2D = $Bezdna
-@onready var _throw_button: Button = $ThrowButton
 @onready var _passive_timer: Timer = $PassiveTimer
 
-var _gruhr_base_y: float
 var _gruhr_passive_base_y: float
 var _passive_stats := preload("res://game/resources/PassiveGruhrStats.tres")
 
-## Лежащие на земле объекты-материалы. Переноской займётся T0007.6.
+## Лежащие на поверхности объекты-материалы, ждущие носильщика.
 var _dropped_materials: Array[Polygon2D] = []
 
+var _carry_state: CarryState = CarryState.IDLE
+var _target_material: Polygon2D = null
+var _carried: Polygon2D = null
+
 func _ready() -> void:
-	_istochnik.input_event.connect(_on_istochnik_input_event)
-	_throw_button.pressed.connect(_on_throw_button_pressed)
+	_shahta.input_event.connect(_on_shahta_input_event)
 	_passive_timer.timeout.connect(_on_passive_timer_timeout)
-	_gruhr_base_y = _gruhr.position.y
 	_gruhr_passive_base_y = _gruhr_passive.position.y
 	_passive_timer.wait_time = _passive_stats.interval
 	_passive_timer.start()
 
-func _on_istochnik_input_event(_viewport: Node, event: InputEvent, _shape_idx: int) -> void:
+func _on_shahta_input_event(_viewport: Node, event: InputEvent, _shape_idx: int) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		_drop_material(_istochnik.position)
-		_jump(_gruhr, _gruhr_base_y)
-
-func _on_throw_button_pressed() -> void:
-	if material_count <= 0:
-		return
-	material_count = 0
-	_material_label.text = "В Бездне: %d" % material_count
-	print("Бросок в Бездну")
-	_pulse_bezdna()
+		_drop_material(_shahta.position)
 
 func _on_passive_timer_timeout() -> void:
 	for i in _passive_stats.material_amount:
 		_drop_material(_gruhr_passive.position)
 	_jump(_gruhr_passive, _gruhr_passive_base_y)
 
-## Роняет объект-материал из точки добычи на землю, с небольшим разбросом,
-## чтобы объекты складывались в кучу, а не в столбик.
+## Роняет объект-материал из точки добычи на землю, с разбросом в сторону
+## Бездны: куча складывается сбоку от постройки, а не под ней, иначе её
+## не видно — а куча и есть видимый сигнал узкого места.
 func _drop_material(from: Vector2) -> void:
 	var item: Polygon2D = MATERIAL_SCENE.instantiate()
 	item.position = from
 	add_child(item)
 	_dropped_materials.append(item)
-	print("Материала на земле: ", _dropped_materials.size())
-	var target_x := from.x + randf_range(-45.0, 45.0)
+	var target_x := from.x + randf_range(38.0, 105.0)
 	var tween := create_tween()
 	tween.set_parallel(true)
 	tween.tween_property(item, "position:x", target_x, 0.35)
 	tween.tween_property(item, "position:y", GROUND_Y, 0.35).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+
+## Носильщик: один Грухр, один объект за раз, всегда самый ранний
+## из лежащих. Очередь задач и выбор ближайшего — не в этом тикете.
+func _process(delta: float) -> void:
+	match _carry_state:
+		CarryState.IDLE:
+			if not _dropped_materials.is_empty():
+				_target_material = _dropped_materials[0]
+				_carry_state = CarryState.TO_MATERIAL
+		CarryState.TO_MATERIAL:
+			if not is_instance_valid(_target_material):
+				_target_material = null
+				_carry_state = CarryState.IDLE
+			elif _step_toward(_target_material.position.x, delta):
+				_dropped_materials.erase(_target_material)
+				_carried = _target_material
+				_target_material = null
+				_carry_state = CarryState.TO_ABYSS
+		CarryState.TO_ABYSS:
+			if _step_toward(THROW_X, delta):
+				_throw_carried()
+	if _carried != null:
+		_carried.position = _gruhr.position + Vector2(0, -28)
+
+## Двигает носильщика к цели по горизонтали. true — дошёл.
+func _step_toward(target_x: float, delta: float) -> bool:
+	var dx := target_x - _gruhr.position.x
+	var step := CARRY_SPEED * delta
+	if absf(dx) <= step:
+		_gruhr.position.x = target_x
+		return true
+	_gruhr.position.x += signf(dx) * step
+	return false
+
+func _throw_carried() -> void:
+	var item := _carried
+	_carried = null
+	_carry_state = CarryState.IDLE
+	material_count += 1
+	_material_label.text = "В Бездне: %d" % material_count
+	print("Брошено в Бездну: ", material_count)
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(item, "position", Vector2(720.0, 560.0), 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tween.tween_property(item, "scale", Vector2.ZERO, 0.5)
+	tween.finished.connect(item.queue_free)
+	_pulse_bezdna()
 
 func _jump(node: Polygon2D, base_y: float) -> void:
 	var tween := create_tween()

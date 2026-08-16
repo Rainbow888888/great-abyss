@@ -2,4 +2,4 @@
 
 [node name="Material" type="Polygon2D"]
 color = Color(0.79, 0.79, 0.74, 1)
-polygon = PackedVector2Array(-6, -6, 6, -6, 6, 6, -6, 6)
+polygon = PackedVector2Array(-3, -3, 3, -3, 3, 3, -3, 3)

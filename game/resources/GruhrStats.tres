@@ -4,4 +4,4 @@
 
 [resource]
 script = ExtResource("1_gruhr")
-carry_speed = 110.0
+carry_speed = 36.7

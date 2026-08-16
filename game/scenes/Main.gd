@@ -18,7 +18,7 @@ const MATERIAL_SCENE := preload("res://game/scenes/Material.tscn")
 const SURFACE_Y := 280.0
 
 ## Куда ложится выбитый молитвой осколок: нижней гранью на поверхность.
-const GROUND_Y := SURFACE_Y - 6.0
+const GROUND_Y := SURFACE_Y - 3.0
 
 ## Куда носильщик доходит, чтобы сбросить груз: у левой кромки зева.
 const THROW_X := 590.0
@@ -144,7 +144,7 @@ func _drop_material(from: Vector2, animate: bool = true) -> void:
 	item.position = from
 	add_child(item)
 	_dropped_materials.append(item)
-	var target_x := from.x + randf_range(38.0, 105.0)
+	var target_x := from.x + randf_range(16.0, 44.0)
 	if not animate:
 		item.position = Vector2(target_x, GROUND_Y)
 		return
@@ -174,7 +174,7 @@ func _process(delta: float) -> void:
 			if _step_toward(THROW_X, delta):
 				_throw_carried()
 	if _carried != null:
-		_carried.position = _gruhr.position + Vector2(0, -28)
+		_carried.position = _gruhr.position + Vector2(0, -12)
 
 ## Двигает носильщика к цели по горизонтали. true — дошёл.
 func _step_toward(target_x: float, delta: float) -> bool:
@@ -281,7 +281,7 @@ func _interp_x(profile: PackedVector2Array, y: float) -> float:
 
 func _jump(node: Polygon2D, base_y: float) -> void:
 	var tween := create_tween()
-	tween.tween_property(node, "position:y", base_y - 20.0, 0.1).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tween.tween_property(node, "position:y", base_y - 8.0, 0.1).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	tween.tween_property(node, "position:y", base_y, 0.15).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
 
 func _pulse_bezdna() -> void:

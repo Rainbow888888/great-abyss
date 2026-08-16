@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://dym3otphdl3u7" path="res://game/scenes/Main.gd" id="1_main"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_monolit"]
-size = Vector2(80, 72)
+size = Vector2(40, 36)
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -22,25 +22,25 @@ polygon = PackedVector2Array(-152.000, 0.000, -146.000, 40.000, -138.000, 90.000
 color = Color(0.6, 0.58, 0.52, 1)
 
 [node name="Monolit" type="Area2D" parent="."]
-position = Vector2(250, 244)
+position = Vector2(250, 262)
 input_pickable = true
 
 [node name="Visual" type="Polygon2D" parent="Monolit"]
 color = Color(0.42, 0.4, 0.45, 1)
-polygon = PackedVector2Array(-26, -36, 26, -36, 30, -10, 36, 36, -36, 36, -30, -10)
+polygon = PackedVector2Array(-13, -18, 13, -18, 15, -5, 18, 18, -18, 18, -15, -5)
 
 [node name="Collision" type="CollisionShape2D" parent="Monolit"]
 shape = SubResource("RectangleShape2D_monolit")
 
 [node name="Gruhr" type="Polygon2D" parent="."]
-position = Vector2(360, 260)
+position = Vector2(360, 272)
 color = Color(0.65, 0.85, 0.55, 1)
-polygon = PackedVector2Array(20.000, 0.000, 17.320, 10.000, 10.000, 17.320, 0.000, 20.000, -10.000, 17.320, -17.320, 10.000, -20.000, 0.000, -17.320, -10.000, -10.000, -17.320, 0.000, -20.000, 10.000, -17.320, 17.320, -10.000)
+polygon = PackedVector2Array(8.000, 0.000, 6.928, 4.000, 4.000, 6.928, 0.000, 8.000, -4.000, 6.928, -6.928, 4.000, -8.000, 0.000, -6.928, -4.000, -4.000, -6.928, 0.000, -8.000, 4.000, -6.928, 6.928, -4.000)
 
 [node name="GruhrPassive" type="Polygon2D" parent="."]
-position = Vector2(200, 260)
+position = Vector2(200, 272)
 color = Color(0.5, 0.75, 0.75, 1)
-polygon = PackedVector2Array(20.000, 0.000, 17.320, 10.000, 10.000, 17.320, 0.000, 20.000, -10.000, 17.320, -17.320, 10.000, -20.000, 0.000, -17.320, -10.000, -10.000, -17.320, 0.000, -20.000, 10.000, -17.320, 17.320, -10.000)
+polygon = PackedVector2Array(8.000, 0.000, 6.928, 4.000, 4.000, 6.928, 0.000, 8.000, -4.000, 6.928, -6.928, 4.000, -8.000, 0.000, -6.928, -4.000, -4.000, -6.928, 0.000, -8.000, 4.000, -6.928, 6.928, -4.000)
 
 [node name="MaterialLabel" type="Label" parent="."]
 offset_left = 20.0

@@ -21,6 +21,12 @@ const GROUND_Y := SURFACE_Y - 6.0
 ## Куда носильщик доходит, чтобы сбросить груз: у левой кромки зева.
 const THROW_X := 590.0
 
+const SAVE_PATH := "user://save.json"
+
+## Меняется, когда меняется состав сохраняемых данных. Сейв чужой
+## версии отбрасывается — начинается новая игра.
+const SAVE_VERSION := 1
+
 enum CarryState { IDLE, TO_MATERIAL, TO_ABYSS }
 
 var material_count := 0
@@ -51,7 +57,58 @@ func _ready() -> void:
 	_gruhr_passive_base_y = _gruhr_passive.position.y
 	_passive_timer.wait_time = _passive_stats.interval
 	_passive_timer.start()
+	load_game()
+	_material_label.text = "В Бездне: %d" % material_count
 	_update_zasypka()
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		save_game()
+		get_tree().quit()
+
+## Сохраняем два числа: сколько брошено и сколько лежит. Координаты
+## лежащих объектов — косметика, при загрузке рассыпаются заново.
+func save_game() -> void:
+	var lying := _dropped_materials.size()
+	if _carried != null:
+		lying += 1
+	var data := {
+		"version": SAVE_VERSION,
+		"material_count": material_count,
+		"lying_materials": lying,
+	}
+	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	if file == null:
+		push_error("Не удалось записать сейв: %s" % SAVE_PATH)
+		return
+	file.store_string(JSON.stringify(data))
+	file.close()
+	print("Сохранено: брошено ", material_count, ", лежит ", lying)
+
+## Любая проблема с сейвом — молча начинаем новую игру, без падения.
+func load_game() -> void:
+	if not FileAccess.file_exists(SAVE_PATH):
+		return
+	var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
+	if file == null:
+		push_warning("Сейв не открылся, начинаем заново")
+		return
+	var text := file.get_as_text()
+	file.close()
+	# JSON.parse_string на битом файле сам печатает ERROR, а битый сейв —
+	# ожидаемый случай, а не сбой. Разбираем через экземпляр, молча.
+	var json := JSON.new()
+	if json.parse(text) != OK or typeof(json.data) != TYPE_DICTIONARY:
+		push_warning("Сейв повреждён, начинаем заново")
+		return
+	var data: Dictionary = json.data
+	if int(data.get("version", 0)) != SAVE_VERSION:
+		push_warning("Версия сейва не совпадает, начинаем заново")
+		return
+	material_count = int(data.get("material_count", 0))
+	for i in int(data.get("lying_materials", 0)):
+		_drop_material(_shahta.position, false)
+	print("Загружено: брошено ", material_count, ", лежит ", _dropped_materials.size())
 
 func _on_shahta_input_event(_viewport: Node, event: InputEvent, _shape_idx: int) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
@@ -65,12 +122,15 @@ func _on_passive_timer_timeout() -> void:
 ## Роняет объект-материал из точки добычи на землю, с разбросом в сторону
 ## Бездны: куча складывается сбоку от постройки, а не под ней, иначе её
 ## не видно — а куча и есть видимый сигнал узкого места.
-func _drop_material(from: Vector2) -> void:
+func _drop_material(from: Vector2, animate: bool = true) -> void:
 	var item: Polygon2D = MATERIAL_SCENE.instantiate()
 	item.position = from
 	add_child(item)
 	_dropped_materials.append(item)
 	var target_x := from.x + randf_range(38.0, 105.0)
+	if not animate:
+		item.position = Vector2(target_x, GROUND_Y)
+		return
 	var tween := create_tween()
 	tween.set_parallel(true)
 	tween.tween_property(item, "position:x", target_x, 0.35)

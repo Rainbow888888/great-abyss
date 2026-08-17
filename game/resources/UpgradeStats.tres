@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="UpgradeStats" format=3]
+
+[ext_resource type="Script" path="res://game/resources/UpgradeStats.gd" id="1_up"]
+
+[resource]
+script = ExtResource("1_up")
+cost_per_level = 5
+speed_bonus = 15.0
+max_level = 3

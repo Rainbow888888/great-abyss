@@ -52,6 +52,7 @@ var _gruhr_passive_base_y: float
 var _passive_stats := preload("res://game/resources/PassiveGruhrStats.tres")
 var _abyss_stats := preload("res://game/resources/AbyssStats.tres")
 var _gruhr_stats := preload("res://game/resources/GruhrStats.tres")
+var _upgrade_stats := preload("res://game/resources/UpgradeStats.tres")
 var _chronicle_entries: Resource = preload("res://game/resources/ChronicleEntries.tres")
 
 ## Лежащие на поверхности осколки, ждущие носильщика.
@@ -60,6 +61,7 @@ var _dropped_materials: Array[Area2D] = []
 var _carry_state: CarryState = CarryState.IDLE
 var _target_material: Area2D = null
 var _carried: Area2D = null
+var _carry_level := 0
 
 func _ready() -> void:
 	_monolit.input_event.connect(_on_monolit_input_event)
@@ -67,6 +69,8 @@ func _ready() -> void:
 	_autosave_timer.timeout.connect(_on_autosave_timer_timeout)
 	var new_game_btn: Button = $UI/NewGameButton
 	new_game_btn.pressed.connect(_on_new_game_button_pressed)
+	var upgrade_btn: Button = $UI/UpgradeButton
+	upgrade_btn.pressed.connect(_on_upgrade_button_pressed)
 	_gruhr_passive_base_y = _gruhr_passive.position.y
 	_passive_timer.wait_time = _passive_stats.interval
 	_passive_timer.start()
@@ -155,6 +159,18 @@ func _on_new_game_button_pressed() -> void:
 	if FileAccess.file_exists(SAVE_PATH):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
 	get_tree().reload_current_scene()
+
+func _on_upgrade_button_pressed() -> void:
+	if _carry_level >= _upgrade_stats.max_level:
+		return
+	var cost := _upgrade_stats.cost_per_level
+	if material_count < cost:
+		return
+	material_count -= cost
+	_carry_level += 1
+	_gruhr_stats.carry_speed += _upgrade_stats.speed_bonus
+	_material_label.text = "В Бездне: %d" % material_count
+	_update_upgrade_button()
 
 ## Роняет осколок из точки добычи (у Монолита) на землю.
 ## Куча-пирамида: осколки идут в случайный столбец с вероятностью
@@ -254,6 +270,7 @@ func _throw_carried() -> void:
 	_carry_state = CarryState.IDLE
 	material_count += 1
 	_material_label.text = "В Бездне: %d" % material_count
+	_update_upgrade_button()
 	print("Брошено в Бездну: ", material_count)
 	_check_chronicle()
 	var landing := Vector2(_bezdna.position.x - 40.0, _bezdna.position.y + _zasypka_top_y())
@@ -291,6 +308,16 @@ func _chronicle_hit(entry: Resource) -> bool:
 ## из самой полости Бездны, чтобы засыпка ложилась по её стенкам,
 ## а не торчала прямоугольником. Один цвет; слои по типам материала
 ## ждут появления самих типов (`docs/02_World/Abyss.md`).
+func _update_upgrade_button() -> void:
+	var btn: Button = $UI/UpgradeButton
+	if _carry_level >= _upgrade_stats.max_level:
+		btn.text = "Обучить бегу [МАКС]"
+		btn.disabled = true
+	else:
+		var cost := _upgrade_stats.cost_per_level
+		btn.text = "Обучить бегу [%d]" % cost
+		btn.disabled = material_count < cost
+
 func _update_zasypka() -> void:
 	if material_count <= 0:
 		_zasypka.polygon = PackedVector2Array()

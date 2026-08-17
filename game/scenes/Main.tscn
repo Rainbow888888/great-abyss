@@ -86,3 +86,10 @@ offset_top = 20.0
 offset_right = 1050.0
 offset_bottom = 48.0
 text = "Новая игра"
+
+[node name="UpgradeButton" type="Button" parent="./UI"]
+offset_left = 950.0
+offset_top = 56.0
+offset_right = 1120.0
+offset_bottom = 84.0
+text = "Обучить бегу [5]"

@@ -79,9 +79,9 @@ wait_time = 3.0
 wait_time = 10.0
 
 [node name="NewGameButton" type="Button" parent="."]
-offset_left = 1400.0
+offset_left = 950.0
 offset_top = 20.0
-offset_right = 1500.0
+offset_right = 1050.0
 offset_bottom = 48.0
 text = "Новая игра"
 pressed.connect(_on_new_game_button_pressed)

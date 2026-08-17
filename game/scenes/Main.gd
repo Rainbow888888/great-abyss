@@ -71,6 +71,8 @@ func _ready() -> void:
 	new_game_btn.pressed.connect(_on_new_game_button_pressed)
 	var upgrade_btn: Button = $UI/UpgradeButton
 	upgrade_btn.pressed.connect(_on_upgrade_button_pressed)
+	var debug_btn: Button = $UI/DebugButton
+	debug_btn.pressed.connect(_on_debug_button_pressed)
 	_gruhr_passive_base_y = _gruhr_passive.position.y
 	_passive_timer.wait_time = _passive_stats.interval
 	_passive_timer.start()
@@ -175,6 +177,11 @@ func _on_upgrade_button_pressed() -> void:
 	_material_label.text = "В Бездне: %d" % material_count
 	_update_upgrade_button()
 	print("UPGRADE lv=%d speed=%.1f" % [_carry_level, _gruhr_stats.carry_speed])
+
+func _on_debug_button_pressed() -> void:
+	_passive_stats.material_amount = min(_passive_stats.material_amount * 10, 100)
+	_passive_timer.wait_time = _passive_stats.interval
+	print("DEBUG: passive x10 -> %d" % _passive_stats.material_amount)
 
 ## Роняет осколок из точки добычи (у Монолита) на землю.
 ## Хаотичная горка: каждый осколок летит в случайную точку

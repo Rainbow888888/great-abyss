@@ -224,12 +224,12 @@ func _squish_monolit() -> void:
 	_monolit.scale = Vector2(0.95, 1.05)
 	tween.tween_property(_monolit, "scale", Vector2(1.0, 1.0), 0.15).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
 
-## Носильщик: один Грухр, один объект за раз, всегда самый ранний.
+## Носильщик: один Грухр, один объект за раз, ближайший к себе.
 func _process(delta: float) -> void:
 	match _carry_state:
 		CarryState.IDLE:
 			if not _dropped_materials.is_empty():
-				_target_material = _dropped_materials[0]
+				_target_material = _nearest_to_gruhr()
 				_carry_state = CarryState.TO_MATERIAL
 		CarryState.TO_MATERIAL:
 			if not is_instance_valid(_target_material):
@@ -255,6 +255,16 @@ func _step_toward(target_x: float, delta: float) -> bool:
 		return true
 	_gruhr.position.x += signf(dx) * step
 	return false
+
+func _nearest_to_gruhr() -> Area2D:
+	var best: Area2D = null
+	var best_d := INF
+	for m in _dropped_materials:
+		var d := absf(m.position.x - _gruhr.position.x)
+		if d < best_d:
+			best_d = d
+			best = m
+	return best
 
 func _throw_carried() -> void:
 	var item := _carried

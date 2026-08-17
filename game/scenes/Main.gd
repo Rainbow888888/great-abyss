@@ -154,18 +154,7 @@ func _on_autosave_timer_timeout() -> void:
 func _on_new_game_button_pressed() -> void:
 	if FileAccess.file_exists(SAVE_PATH):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
-	for item in _dropped_materials:
-		item.queue_free()
-	_dropped_materials.clear()
-	_column_counts.clear()
-	if _carried != null:
-		_carried.queue_free()
-		_carried = null
-	_target_material = null
-	_carry_state = CarryState.IDLE
-	material_count = 0
-	_material_label.text = "В Бездне: 0"
-	_update_zasypka()
+	get_tree().reload_current_scene()
 
 ## Роняет осколок из точки добычи (у Монолита) на землю.
 ## Куча-пирамида: осколки идут в случайный столбец с вероятностью

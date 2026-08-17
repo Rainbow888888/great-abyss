@@ -123,8 +123,7 @@ func load_game() -> void:
 	# JSON.parse_string на битом файле сам печатает ERROR, а битый сейв —
 	# ожидаемый случай, а не сбой. Разбираем через экземпляр, молча.
 	var json := JSON.new()
-	if json.parse(text) != OK or typeof(json.data) != TYPE_DICTIONARY:
-		push_warning("Сейв повреждён, начинаем заново")
+	if json.parse(text) != OK:
 		return
 	var data: Dictionary = json.data
 	if int(data.get("version", 0)) != SAVE_VERSION:

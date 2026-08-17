@@ -37,8 +37,8 @@ enum CarryState { IDLE, TO_MATERIAL, TO_ABYSS }
 
 var material_count := 0
 
-@onready var _material_label: Label = $MaterialLabel
-@onready var _chronicle_label: Label = $ChronicleLabel
+@onready var _material_label: Label = $UI/MaterialLabel
+@onready var _chronicle_label: Label = $UI/ChronicleLabel
 @onready var _monolit: Area2D = $Monolit
 @onready var _gruhr: Polygon2D = $Gruhr
 @onready var _gruhr_passive: Polygon2D = $GruhrPassive

@@ -8,6 +8,8 @@ size = Vector2(180, 180)
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
 
+[node name="UI" type="CanvasLayer" parent="."]
+
 [node name="Zemlya" type="Polygon2D" parent="."]
 position = Vector2(0, 280)
 color = Color(0.24, 0.2, 0.17, 1)
@@ -54,14 +56,14 @@ polygon = PackedVector2Array(-1.5, 6, 1.5, 6, 1.5, -26, -1.5, -26)
 color = Color(0.8, 0.8, 0.85, 1)
 polygon = PackedVector2Array(-7, -26, 7, -26, 3, -20, -4, -20)
 
-[node name="MaterialLabel" type="Label" parent="."]
+[node name="MaterialLabel" type="Label" parent="./UI"]
 offset_left = 20.0
 offset_top = 20.0
 offset_right = 220.0
 offset_bottom = 48.0
 text = "В Бездне: 0"
 
-[node name="ChronicleLabel" type="Label" parent="."]
+[node name="ChronicleLabel" type="Label" parent="./UI"]
 visible = false
 offset_left = 276.0
 offset_top = 604.0
@@ -78,7 +80,7 @@ wait_time = 3.0
 [node name="AutosaveTimer" type="Timer" parent="."]
 wait_time = 10.0
 
-[node name="NewGameButton" type="Button" parent="."]
+[node name="NewGameButton" type="Button" parent="./UI"]
 offset_left = 950.0
 offset_top = 20.0
 offset_right = 1050.0

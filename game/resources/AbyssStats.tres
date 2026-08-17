@@ -5,3 +5,5 @@
 [resource]
 script = ExtResource("1_abyss")
 capacity = 60
+reclaim_time = 20.0
+reclaim_speed = 40.0

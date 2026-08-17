@@ -142,6 +142,7 @@ func _on_autosave_timer_timeout() -> void:
 func _drop_material(from: Vector2, animate: bool = true) -> void:
 	var item: Polygon2D = MATERIAL_SCENE.instantiate()
 	item.position = from
+	item.reclaimed.connect(_on_material_reclaimed)
 	add_child(item)
 	_dropped_materials.append(item)
 	var target_x := from.x + randf_range(16.0, 44.0)
@@ -152,6 +153,15 @@ func _drop_material(from: Vector2, animate: bool = true) -> void:
 	tween.set_parallel(true)
 	tween.tween_property(item, "position:x", target_x, 0.35)
 	tween.tween_property(item, "position:y", GROUND_Y, 0.35).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+
+func _on_material_reclaimed(item: Polygon2D) -> void:
+	_dropped_materials.erase(item)
+	if _target_material == item:
+		_target_material = null
+		_carry_state = CarryState.IDLE
+	if _carried == item:
+		_carried = null
+		_carry_state = CarryState.IDLE
 
 ## Носильщик: один Грухр, один объект за раз, всегда самый ранний
 ## из лежащих. Очередь задач и выбор ближайшего — не в этом тикете.

@@ -1,5 +1,8 @@
-[gd_scene format=3]
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/scenes/Material.gd" id="1_mat"]
 
 [node name="Material" type="Polygon2D"]
+script = ExtResource("1_mat")
 color = Color(0.79, 0.79, 0.74, 1)
 polygon = PackedVector2Array(-3, -3, 3, -3, 3, 3, -3, 3)

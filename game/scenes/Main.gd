@@ -183,8 +183,30 @@ func _process(delta: float) -> void:
 		CarryState.TO_ABYSS:
 			if _step_toward(THROW_X, delta):
 				_throw_carried()
+	_check_reclaims(delta)
 	if _carried != null:
 		_carried.position = _gruhr.position + Vector2(0, -12)
+
+## Высота кучи: разница от поверхности до самого верхнего лежащего
+## осколка. Чем выше куча — тем быстрее Бездна всасывает (T0014).
+func _pile_height() -> float:
+	var max_h := 0.0
+	for item in _dropped_materials:
+		var h := GROUND_Y - item.position.y
+		if h > max_h:
+			max_h = h
+	return max_h
+
+## Проверяем каждый лежащий осколок: если его возраст превысил
+## динамический порог (ч выше — порог ниже), запускаем реклейм.
+func _check_reclaims(_delta: float) -> void:
+	var pile_h := _pile_height()
+	for item in _dropped_materials:
+		if item.reclaiming:
+			continue
+		var threshold := _abyss_stats.reclaim_time / (1.0 + _abyss_stats.pile_surge_factor * pile_h)
+		if item.age >= threshold:
+			item.reclaiming = true
 
 ## Двигает носильщика к цели по горизонтали. true — дошёл.
 func _step_toward(target_x: float, delta: float) -> bool:

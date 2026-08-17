@@ -12,3 +12,7 @@ class_name AbyssStats
 
 ## С какой скоростью (px/с) притягивается к Бездне.
 @export var reclaim_speed: float = 40.0
+
+## Насколько высота кучи ускоряет реклейм (T0014).
+## Порог = reclaim_time / (1 + pile_surge_factor * pile_height).
+@export var pile_surge_factor: float = 0.05

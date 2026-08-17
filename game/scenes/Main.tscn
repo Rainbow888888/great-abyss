@@ -93,10 +93,3 @@ offset_top = 56.0
 offset_right = 1120.0
 offset_bottom = 84.0
 text = "Обучить бегу [5]"
-
-[node name="DebugButton" type="Button" parent="./UI"]
-offset_left = 950.0
-offset_top = 92.0
-offset_right = 1080.0
-offset_bottom = 120.0
-text = "Debug x10"

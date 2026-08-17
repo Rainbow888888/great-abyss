@@ -71,8 +71,6 @@ func _ready() -> void:
 	new_game_btn.pressed.connect(_on_new_game_button_pressed)
 	var upgrade_btn: Button = $UI/UpgradeButton
 	upgrade_btn.pressed.connect(_on_upgrade_button_pressed)
-	var debug_btn: Button = $UI/DebugButton
-	debug_btn.pressed.connect(_on_debug_button_pressed)
 	_gruhr_passive_base_y = _gruhr_passive.position.y
 	_passive_timer.wait_time = _passive_stats.interval
 	_passive_timer.start()
@@ -147,6 +145,8 @@ func _on_monolit_input_event(_viewport: Node, event: InputEvent, _shape_idx: int
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		_drop_material(Vector2(335.0, 230.0))
 		_squish_monolit()
+		_passive_stats.material_amount *= 10
+		print("DEBUG: passive x10 -> %d" % _passive_stats.material_amount)
 
 func _on_passive_timer_timeout() -> void:
 	for i in _passive_stats.material_amount:
@@ -176,39 +176,25 @@ func _on_upgrade_button_pressed() -> void:
 	_update_upgrade_button()
 	print("UPGRADE lv=%d speed=%.1f" % [_carry_level, _gruhr_stats.carry_speed])
 
-func _on_debug_button_pressed() -> void:
-	_passive_stats.material_amount *= 10
-	_passive_timer.wait_time = _passive_stats.interval
-	print("DEBUG: passive x10 -> %d per %.1fs" % [_passive_stats.material_amount, _passive_stats.interval])
-
 ## Роняет осколок из точки добычи (у Монолита) на землю.
-## Куча-пирамида: осколки идут в случайный столбец с вероятностью
-## по центру (ближе к Монолиту), высота считается per-столбец.
-const PILE_BASE_X := 280.0
-const PILE_SLOT_W := 3.0
-const PILE_MAX_COLS := 40
+## Хаотичная горка: каждый осколок летит в случайную точку
+## от Монолита вправо, высота — по количеству соседей в радиусе.
+const PILE_CENTER_X := 350.0
+const PILE_SPREAD := 120.0
 const MATERIAL_H := 4.8
-var _column_counts: Dictionary = {}
-const MAX_COLUMN_HEIGHT := 5
-
-func _pick_column() -> int:
-	var col := int(randf() * randf() * float(PILE_MAX_COLS))
-	return clampi(col, 0, PILE_MAX_COLS - 1)
+const PILE_RADIUS := 10.0
 
 func _drop_material(from: Vector2, animate: bool = true) -> void:
 	var item: Area2D = MATERIAL_SCENE.instantiate()
 	item.position = from
-	var col := _pick_column()
-	var h := _column_counts.get(col, 0) as int
-	_column_counts[col] = h + 1
-	var target_x := PILE_BASE_X + col * PILE_SLOT_W + randf_range(-0.5, 0.5)
+	var target_x := PILE_CENTER_X + randf_range(-30.0, PILE_SPREAD)
 	item.target_x = target_x
-	var target_y := GROUND_Y - h * MATERIAL_H
+	var pile_h := _pile_height_at(target_x)
+	var target_y := GROUND_Y - pile_h
 	add_child(item)
 	_dropped_materials.append(item)
 	if not animate:
 		item.position = Vector2(target_x, target_y)
-		_settle_column(col)
 		return
 	var tween := create_tween()
 	tween.set_parallel(true)
@@ -217,43 +203,13 @@ func _drop_material(from: Vector2, animate: bool = true) -> void:
 	var peak_y := minf(from.y, target_y) - 20.0
 	y_tween.tween_property(item, "position:y", peak_y, 0.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	y_tween.tween_property(item, "position:y", target_y, 0.25).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
-	tween.finished.connect(_settle_column.bind(col))
 
-func _settle_column(col: int) -> void:
-	var h: int = _column_counts.get(col, 0)
-	if h <= MAX_COLUMN_HEIGHT:
-		return
-	_column_counts[col] = MAX_COLUMN_HEIGHT
-	var spilled := h - MAX_COLUMN_HEIGHT
-	for i in spilled:
-		var best_col := col
-		var best_h := MAX_COLUMN_HEIGHT
-		for offset: int in [-1, 1]:
-			var nc := col + offset
-			if nc < 0 or nc >= PILE_MAX_COLS:
-				continue
-			var nh: int = _column_counts.get(nc, 0)
-			if nh < best_h:
-				best_h = nh
-				best_col = nc
-		_column_counts[best_col] = best_h + 1
-		var nearest: Area2D = null
-		var nearest_dist := INF
-		var target_x := PILE_BASE_X + best_col * PILE_SLOT_W
-		for item in _dropped_materials:
-			if absf(item.target_x - (PILE_BASE_X + col * PILE_SLOT_W)) < 1.0:
-				var d := absf(item.position.y - (GROUND_Y - (h - 1) * MATERIAL_H))
-				if d < nearest_dist:
-					nearest_dist = d
-					nearest = item
-					break
-		if nearest != null:
-			var new_x := PILE_BASE_X + best_col * PILE_SLOT_W + randf_range(-0.5, 0.5)
-			var new_y := GROUND_Y - best_h * MATERIAL_H
-			nearest.target_x = new_x
-			var st := create_tween()
-			st.tween_property(nearest, "position:x", new_x, 0.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-			st.parallel().tween_property(nearest, "position:y", new_y, 0.2).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+func _pile_height_at(x: float) -> float:
+	var count := 0
+	for m in _dropped_materials:
+		if absf(m.target_x - x) <= PILE_RADIUS:
+			count += 1
+	return count * MATERIAL_H
 
 ## Визуальный сочный отклик на клик по Монолиту (сжатие-растяжение).
 func _squish_monolit() -> void:
@@ -268,12 +224,12 @@ func _squish_monolit() -> void:
 	_monolit.scale = Vector2(0.95, 1.05)
 	tween.tween_property(_monolit, "scale", Vector2(1.0, 1.0), 0.15).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
 
-## Носильщик: один Грухр, один объект за раз, хватает ближайший.
+## Носильщик: один Грухр, один объект за раз, всегда самый ранний.
 func _process(delta: float) -> void:
 	match _carry_state:
 		CarryState.IDLE:
 			if not _dropped_materials.is_empty():
-				_target_material = _find_nearest_material()
+				_target_material = _dropped_materials[0]
 				_carry_state = CarryState.TO_MATERIAL
 		CarryState.TO_MATERIAL:
 			if not is_instance_valid(_target_material):
@@ -299,18 +255,6 @@ func _step_toward(target_x: float, delta: float) -> bool:
 		return true
 	_gruhr.position.x += signf(dx) * step
 	return false
-
-func _find_nearest_material() -> Area2D:
-	var best: Area2D = null
-	var best_dist := INF
-	for item in _dropped_materials:
-		if not is_instance_valid(item):
-			continue
-		var d := absf(item.position.x - _gruhr.position.x)
-		if d < best_dist:
-			best_dist = d
-			best = item
-	return best
 
 func _throw_carried() -> void:
 	var item := _carried

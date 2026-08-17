@@ -86,4 +86,3 @@ offset_top = 20.0
 offset_right = 1050.0
 offset_bottom = 48.0
 text = "Новая игра"
-pressed.connect(_on_new_game_button_pressed)

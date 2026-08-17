@@ -65,6 +65,8 @@ func _ready() -> void:
 	_monolit.input_event.connect(_on_monolit_input_event)
 	_passive_timer.timeout.connect(_on_passive_timer_timeout)
 	_autosave_timer.timeout.connect(_on_autosave_timer_timeout)
+	var new_game_btn: Button = $UI/NewGameButton
+	new_game_btn.pressed.connect(_on_new_game_button_pressed)
 	_gruhr_passive_base_y = _gruhr_passive.position.y
 	_passive_timer.wait_time = _passive_stats.interval
 	_passive_timer.start()
@@ -171,7 +173,7 @@ func _on_new_game_button_pressed() -> void:
 const PILE_BASE_X := 280.0
 const PILE_SLOT_W := 3.0
 const PILE_MAX_COLS := 40
-const MATERIAL_H := 1.2
+const MATERIAL_H := 2.4
 var _column_counts: Dictionary = {}
 
 func _pick_column() -> int:

@@ -1,8 +1,17 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://game/scenes/Material.gd" id="1_mat"]
 
-[node name="Material" type="Polygon2D"]
+[sub_resource type="CircleShape2D" id="CircleShape2D_mat"]
+radius = 2.4
+
+[node name="Material" type="Area2D"]
 script = ExtResource("1_mat")
+input_pickable = true
+
+[node name="Visual" type="Polygon2D" parent="."]
 color = Color(0.79, 0.79, 0.74, 1)
-polygon = PackedVector2Array(-1.2, -1.2, 1.2, -1.2, 1.2, 1.2, -1.2, 1.2)
+polygon = PackedVector2Array(-2.4, -2.4, 2.4, -2.4, 2.4, 2.4, -2.4, 2.4)
+
+[node name="Collision" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_mat")

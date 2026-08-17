@@ -55,11 +55,11 @@ var _gruhr_stats := preload("res://game/resources/GruhrStats.tres")
 var _chronicle_entries: Resource = preload("res://game/resources/ChronicleEntries.tres")
 
 ## Лежащие на поверхности осколки, ждущие носильщика.
-var _dropped_materials: Array[Polygon2D] = []
+var _dropped_materials: Array[Area2D] = []
 
 var _carry_state: CarryState = CarryState.IDLE
-var _target_material: Polygon2D = null
-var _carried: Polygon2D = null
+var _target_material: Area2D = null
+var _carried: Area2D = null
 
 func _ready() -> void:
 	_monolit.input_event.connect(_on_monolit_input_event)
@@ -162,7 +162,7 @@ func _on_new_game_button_pressed() -> void:
 const PILE_BASE_X := 280.0
 const PILE_SLOT_W := 3.0
 const PILE_MAX_COLS := 40
-const MATERIAL_H := 2.4
+const MATERIAL_H := 4.8
 var _column_counts: Dictionary = {}
 
 func _pick_column() -> int:
@@ -170,7 +170,7 @@ func _pick_column() -> int:
 	return clampi(col, 0, PILE_MAX_COLS - 1)
 
 func _drop_material(from: Vector2, animate: bool = true) -> void:
-	var item: Polygon2D = MATERIAL_SCENE.instantiate()
+	var item: Area2D = MATERIAL_SCENE.instantiate()
 	item.position = from
 	var col := _pick_column()
 	var h := _column_counts.get(col, 0) as int

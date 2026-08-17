@@ -1,18 +1,16 @@
-[gd_resource type="Resource" script_class="ChronicleEntries" load_steps=5 format=3]
+[gd_resource type="Resource" script_class="ChronicleEntries" format=3 uid="uid://b0ywb2f0prlal"]
 
-[ext_resource type="Script" path="res://game/resources/ChronicleEntries.gd" id="1"]
-[ext_resource type="Script" path="res://game/resources/ChronicleEntry.gd" id="2"]
+[ext_resource type="Script" uid="uid://7723xoacdhor" path="res://game/resources/ChronicleEntries.gd" id="1"]
+[ext_resource type="Script" uid="uid://dube1iajft1ul" path="res://game/resources/ChronicleEntry.gd" id="2"]
 
 [sub_resource type="Resource" id="entry_first"]
 script = ExtResource("2")
-trigger = 0
 threshold = 1
 text = "Сегодня в Бездну впервые что-то упало. Она не поблагодарила."
 
 [sub_resource type="Resource" id="entry_tenth"]
 script = ExtResource("2")
 trigger = 1
-threshold = 10
 text = "Десятое подношение. Бездна перестала притворяться, что не замечает."
 
 [sub_resource type="Resource" id="entry_half"]

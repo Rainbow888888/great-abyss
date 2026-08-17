@@ -119,16 +119,16 @@ func load_game() -> void:
 		return
 	material_count = int(data.get("material_count", 0))
 	for i in int(data.get("lying_materials", 0)):
-		_drop_material(_monolit.position, false)
+		_drop_material(Vector2(_monolit.position.x, GROUND_Y), false)
 	print("Загружено: брошено ", material_count, ", лежит ", _dropped_materials.size())
 
 func _on_monolit_input_event(_viewport: Node, event: InputEvent, _shape_idx: int) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		_drop_material(_monolit.position)
+		_drop_material(Vector2(_monolit.position.x, GROUND_Y))
 
 func _on_passive_timer_timeout() -> void:
 	for i in _passive_stats.material_amount:
-		_drop_material(_monolit.position)
+		_drop_material(Vector2(_monolit.position.x, GROUND_Y))
 	_jump(_gruhr_passive, _gruhr_passive_base_y)
 
 ## Автосейв по таймеру: не терять прогресс при падении игры или
@@ -136,32 +136,35 @@ func _on_passive_timer_timeout() -> void:
 func _on_autosave_timer_timeout() -> void:
 	save_game()
 
-## Роняет осколок из точки добычи (у Монолита) на землю, с разбросом в
-## сторону Бездны: куча складывается сбоку от Первокамня, а не под ним,
-## иначе её не видно — а куча и есть видимый сигнал узкого места.
+## Роняет осколок из точки добычи (у Монолита) на землю.
+## Куча растёт вверх: каждый новый осколок в радиусе 20 px
+## ложится на 6 px выше предыдущего (визуальная горка).
 func _drop_material(from: Vector2, animate: bool = true) -> void:
 	var item: Polygon2D = MATERIAL_SCENE.instantiate()
 	item.position = from
-	item.reclaimed.connect(_on_material_reclaimed)
+	var target_x := from.x + randf_range(16.0, 44.0)
+	item.target_x = target_x
+	var pile_h := _pile_height_at(target_x)
+	var target_y := GROUND_Y - pile_h
 	add_child(item)
 	_dropped_materials.append(item)
-	var target_x := from.x + randf_range(16.0, 44.0)
 	if not animate:
-		item.position = Vector2(target_x, GROUND_Y)
+		item.position = Vector2(target_x, target_y)
 		return
 	var tween := create_tween()
 	tween.set_parallel(true)
 	tween.tween_property(item, "position:x", target_x, 0.35)
-	tween.tween_property(item, "position:y", GROUND_Y, 0.35).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tween.tween_property(item, "position:y", target_y, 0.35).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 
-func _on_material_reclaimed(item: Polygon2D) -> void:
-	_dropped_materials.erase(item)
-	if _target_material == item:
-		_target_material = null
-		_carry_state = CarryState.IDLE
-	if _carried == item:
-		_carried = null
-		_carry_state = CarryState.IDLE
+## Высота кучи в заданной x-координате: считаем сколько осколков
+## уже лежит в радиусе 20 px, каждый добавляет 6 px высоты.
+## Считаем по target_x (куда осколок летит), а не по текущей позиции.
+func _pile_height_at(x: float) -> float:
+	var count := 0
+	for item in _dropped_materials:
+		if absf(item.target_x - x) <= 20.0:
+			count += 1
+	return count * 6.0
 
 ## Носильщик: один Грухр, один объект за раз, всегда самый ранний
 ## из лежащих. Очередь задач и выбор ближайшего — не в этом тикете.
@@ -183,30 +186,8 @@ func _process(delta: float) -> void:
 		CarryState.TO_ABYSS:
 			if _step_toward(THROW_X, delta):
 				_throw_carried()
-	_check_reclaims(delta)
 	if _carried != null:
 		_carried.position = _gruhr.position + Vector2(0, -12)
-
-## Высота кучи: разница от поверхности до самого верхнего лежащего
-## осколка. Чем выше куча — тем быстрее Бездна всасывает (T0014).
-func _pile_height() -> float:
-	var max_h := 0.0
-	for item in _dropped_materials:
-		var h := GROUND_Y - item.position.y
-		if h > max_h:
-			max_h = h
-	return max_h
-
-## Проверяем каждый лежащий осколок: если его возраст превысил
-## динамический порог (ч выше — порог ниже), запускаем реклейм.
-func _check_reclaims(_delta: float) -> void:
-	var pile_h := _pile_height()
-	for item in _dropped_materials:
-		if item.reclaiming:
-			continue
-		var threshold := _abyss_stats.reclaim_time / (1.0 + _abyss_stats.pile_surge_factor * pile_h)
-		if item.age >= threshold:
-			item.reclaiming = true
 
 ## Двигает носильщика к цели по горизонтали. true — дошёл.
 func _step_toward(target_x: float, delta: float) -> bool:

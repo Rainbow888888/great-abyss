@@ -1,21 +1,9 @@
 extends Polygon2D
 
-## Осколок материала. Двигается к Бездне, когда reclaiming = true.
-## Реклейм запускается из Main.gd (T0013–T0014).
+## Осколок материала. Хранит target_x для расчёта высоты кучи.
 
 var age := 0.0
-var reclaiming := false
-
-var _abyss_stats: Resource = preload("res://game/resources/AbyssStats.tres")
-
-signal reclaimed(item: Polygon2D)
+var target_x := 0.0
 
 func _process(delta: float) -> void:
 	age += delta
-	if reclaiming:
-		var target := Vector2(760.0, 280.0)
-		var dir := (target - position).normalized()
-		position += dir * _abyss_stats.reclaim_speed * delta
-		if position.distance_to(target) < 12.0:
-			reclaimed.emit(self)
-			queue_free()

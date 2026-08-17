@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://dym3otphdl3u7" path="res://game/scenes/Main.gd" id="1_main"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_monolit"]
-size = Vector2(40, 36)
+size = Vector2(180, 180)
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -22,12 +22,12 @@ polygon = PackedVector2Array(-152.000, 0.000, -146.000, 40.000, -138.000, 90.000
 color = Color(0.6, 0.58, 0.52, 1)
 
 [node name="Monolit" type="Area2D" parent="."]
-position = Vector2(250, 262)
+position = Vector2(250, 190)
 input_pickable = true
 
 [node name="Visual" type="Polygon2D" parent="Monolit"]
 color = Color(0.42, 0.4, 0.45, 1)
-polygon = PackedVector2Array(-13, -18, 13, -18, 15, -5, 18, 18, -18, 18, -15, -5)
+polygon = PackedVector2Array(-65, -90, 65, -90, 75, -25, 90, 90, -90, 90, -75, -25)
 
 [node name="Collision" type="CollisionShape2D" parent="Monolit"]
 shape = SubResource("RectangleShape2D_monolit")

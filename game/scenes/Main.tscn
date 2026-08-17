@@ -38,7 +38,7 @@ color = Color(0.65, 0.85, 0.55, 1)
 polygon = PackedVector2Array(8.000, 0.000, 6.928, 4.000, 4.000, 6.928, 0.000, 8.000, -4.000, 6.928, -6.928, 4.000, -8.000, 0.000, -6.928, -4.000, -4.000, -6.928, 0.000, -8.000, 4.000, -6.928, 6.928, -4.000)
 
 [node name="GruhrPassive" type="Polygon2D" parent="."]
-position = Vector2(200, 272)
+position = Vector2(145, 272)
 color = Color(0.5, 0.75, 0.75, 1)
 polygon = PackedVector2Array(8.000, 0.000, 6.928, 4.000, 4.000, 6.928, 0.000, 8.000, -4.000, 6.928, -6.928, 4.000, -8.000, 0.000, -6.928, -4.000, -4.000, -6.928, 0.000, -8.000, 4.000, -6.928, 6.928, -4.000)
 
@@ -77,3 +77,11 @@ wait_time = 3.0
 
 [node name="AutosaveTimer" type="Timer" parent="."]
 wait_time = 10.0
+
+[node name="NewGameButton" type="Button" parent="."]
+offset_left = 1400.0
+offset_top = 20.0
+offset_right = 1500.0
+offset_bottom = 48.0
+text = "Новая игра"
+pressed.connect(_on_new_game_button_pressed)

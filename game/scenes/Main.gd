@@ -42,6 +42,7 @@ var material_count := 0
 @onready var _monolit: Area2D = $Monolit
 @onready var _gruhr: Polygon2D = $Gruhr
 @onready var _gruhr_passive: Polygon2D = $GruhrPassive
+@onready var _kyrka: Node2D = $GruhrPassive/Kyrka
 @onready var _bezdna: Polygon2D = $Bezdna
 @onready var _zasypka: Polygon2D = $Bezdna/Zasypka
 @onready var _passive_timer: Timer = $PassiveTimer
@@ -70,8 +71,20 @@ func _ready() -> void:
 	_autosave_timer.wait_time = AUTOSAVE_INTERVAL
 	_autosave_timer.start()
 	load_game()
+	_start_kyrka_animation()
 	_material_label.text = "В Бездне: %d" % material_count
 	_update_zasypka()
+
+func _start_kyrka_animation() -> void:
+	if _kyrka == null:
+		return
+	var tween := create_tween().set_loops()
+	# Замах назад (медленно)
+	tween.tween_property(_kyrka, "rotation", -0.8, 0.6).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	# Удар вперед (быстро)
+	tween.tween_property(_kyrka, "rotation", 0.8, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	# Плавный возврат в дефолтное положение
+	tween.tween_property(_kyrka, "rotation", -0.5, 0.45).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
@@ -119,16 +132,17 @@ func load_game() -> void:
 		return
 	material_count = int(data.get("material_count", 0))
 	for i in int(data.get("lying_materials", 0)):
-		_drop_material(Vector2(_monolit.position.x, GROUND_Y), false)
+		_drop_material(Vector2(335.0, 230.0), false)
 	print("Загружено: брошено ", material_count, ", лежит ", _dropped_materials.size())
 
 func _on_monolit_input_event(_viewport: Node, event: InputEvent, _shape_idx: int) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		_drop_material(Vector2(_monolit.position.x, GROUND_Y))
+		_drop_material(Vector2(335.0, 230.0))
+		_squish_monolit()
 
 func _on_passive_timer_timeout() -> void:
 	for i in _passive_stats.material_amount:
-		_drop_material(Vector2(_monolit.position.x, GROUND_Y))
+		_drop_material(Vector2(335.0, 230.0))
 	_jump(_gruhr_passive, _gruhr_passive_base_y)
 
 ## Автосейв по таймеру: не терять прогресс при падении игры или
@@ -136,13 +150,19 @@ func _on_passive_timer_timeout() -> void:
 func _on_autosave_timer_timeout() -> void:
 	save_game()
 
+func _on_new_game_button_pressed() -> void:
+	if FileAccess.file_exists(SAVE_PATH):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
+	get_tree().reload_current_scene()
+
 ## Роняет осколок из точки добычи (у Монолита) на землю.
-## Куча растёт вверх: каждый новый осколок в радиусе 20 px
-## ложится на 6 px выше предыдущего (визуальная горка).
+## Осколки летят в красивой параболической дуге вправо и ложатся
+## на кучу (T0014, визуальная горка). Каждый новый осколок в радиусе 20 px
+## ложится на 6 px выше предыдущего.
 func _drop_material(from: Vector2, animate: bool = true) -> void:
 	var item: Polygon2D = MATERIAL_SCENE.instantiate()
 	item.position = from
-	var target_x := from.x + randf_range(16.0, 44.0)
+	var target_x := randf_range(350.0, 410.0)
 	item.target_x = target_x
 	var pile_h := _pile_height_at(target_x)
 	var target_y := GROUND_Y - pile_h
@@ -151,10 +171,17 @@ func _drop_material(from: Vector2, animate: bool = true) -> void:
 	if not animate:
 		item.position = Vector2(target_x, target_y)
 		return
+	
+	# Горизонтальное движение по синусоиде (плавно)
 	var tween := create_tween()
 	tween.set_parallel(true)
-	tween.tween_property(item, "position:x", target_x, 0.35)
-	tween.tween_property(item, "position:y", target_y, 0.35).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tween.tween_property(item, "position:x", target_x, 0.45).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	
+	# Вертикальное движение по параболической дуге (сначала вверх, потом вниз)
+	var y_tween := create_tween()
+	var peak_y := minf(from.y, target_y) - 40.0
+	y_tween.tween_property(item, "position:y", peak_y, 0.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	y_tween.tween_property(item, "position:y", target_y, 0.25).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
 
 ## Высота кучи в заданной x-координате: считаем сколько осколков
 ## уже лежит в радиусе 20 px, каждый добавляет 6 px высоты.
@@ -165,6 +192,43 @@ func _pile_height_at(x: float) -> float:
 		if absf(item.target_x - x) <= 20.0:
 			count += 1
 	return count * 6.0
+
+## Осаживает кучу вниз, когда один из осколков забирают.
+## Предотвращает висение камней в воздухе, заставляя их плавно сползать.
+func _settle_pile() -> void:
+	var sorted := _dropped_materials.duplicate()
+	# Сортируем снизу вверх (по y по убыванию, то есть от земли вверх)
+	sorted.sort_custom(func(a, b): return a.position.y > b.position.y)
+	
+	var processed_items: Array[Polygon2D] = []
+	for item in sorted:
+		var count := 0
+		for proc in processed_items:
+			if absf(proc.target_x - item.target_x) <= 20.0:
+				count += 1
+		var target_y := GROUND_Y - (count * 6.0)
+		if absf(item.position.y - target_y) > 0.1:
+			if item.has_meta("settle_tween"):
+				var old_tween = item.get_meta("settle_tween")
+				if old_tween and old_tween.is_valid():
+					old_tween.kill()
+			var tween := create_tween()
+			item.set_meta("settle_tween", tween)
+			tween.tween_property(item, "position:y", target_y, 0.25).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		processed_items.append(item)
+
+## Визуальный сочный отклик на клик по Монолиту (сжатие-растяжение).
+func _squish_monolit() -> void:
+	if _monolit == null:
+		return
+	if _monolit.has_meta("squish_tween"):
+		var old_tween = _monolit.get_meta("squish_tween")
+		if old_tween and old_tween.is_valid():
+			old_tween.kill()
+	var tween := create_tween()
+	_monolit.set_meta("squish_tween", tween)
+	_monolit.scale = Vector2(0.95, 1.05)
+	tween.tween_property(_monolit, "scale", Vector2(1.0, 1.0), 0.15).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
 
 ## Носильщик: один Грухр, один объект за раз, всегда самый ранний
 ## из лежащих. Очередь задач и выбор ближайшего — не в этом тикете.
@@ -183,6 +247,7 @@ func _process(delta: float) -> void:
 				_carried = _target_material
 				_target_material = null
 				_carry_state = CarryState.TO_ABYSS
+				_settle_pile()
 		CarryState.TO_ABYSS:
 			if _step_toward(THROW_X, delta):
 				_throw_carried()

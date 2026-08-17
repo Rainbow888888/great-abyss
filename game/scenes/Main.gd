@@ -171,6 +171,7 @@ func _on_upgrade_button_pressed() -> void:
 	_gruhr_stats.carry_speed += _upgrade_stats.speed_bonus
 	_material_label.text = "В Бездне: %d" % material_count
 	_update_upgrade_button()
+	print("UPGRADE lv=%d speed=%.1f" % [_carry_level, _gruhr_stats.carry_speed])
 
 ## Роняет осколок из точки добычи (у Монолита) на землю.
 ## Куча-пирамида: осколки идут в случайный столбец с вероятностью
@@ -180,6 +181,7 @@ const PILE_SLOT_W := 3.0
 const PILE_MAX_COLS := 40
 const MATERIAL_H := 4.8
 var _column_counts: Dictionary = {}
+const MAX_COLUMN_HEIGHT := 5
 
 func _pick_column() -> int:
 	var col := int(randf() * randf() * float(PILE_MAX_COLS))
@@ -198,6 +200,7 @@ func _drop_material(from: Vector2, animate: bool = true) -> void:
 	_dropped_materials.append(item)
 	if not animate:
 		item.position = Vector2(target_x, target_y)
+		_settle_column(col)
 		return
 	var tween := create_tween()
 	tween.set_parallel(true)
@@ -206,6 +209,43 @@ func _drop_material(from: Vector2, animate: bool = true) -> void:
 	var peak_y := minf(from.y, target_y) - 20.0
 	y_tween.tween_property(item, "position:y", peak_y, 0.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	y_tween.tween_property(item, "position:y", target_y, 0.25).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	tween.finished.connect(_settle_column.bind(col))
+
+func _settle_column(col: int) -> void:
+	var h: int = _column_counts.get(col, 0)
+	if h <= MAX_COLUMN_HEIGHT:
+		return
+	_column_counts[col] = MAX_COLUMN_HEIGHT
+	var spilled := h - MAX_COLUMN_HEIGHT
+	for i in spilled:
+		var best_col := col
+		var best_h := MAX_COLUMN_HEIGHT
+		for offset: int in [-1, 1]:
+			var nc := col + offset
+			if nc < 0 or nc >= PILE_MAX_COLS:
+				continue
+			var nh: int = _column_counts.get(nc, 0)
+			if nh < best_h:
+				best_h = nh
+				best_col = nc
+		_column_counts[best_col] = best_h + 1
+		var nearest: Area2D = null
+		var nearest_dist := INF
+		var target_x := PILE_BASE_X + best_col * PILE_SLOT_W
+		for item in _dropped_materials:
+			if absf(item.target_x - (PILE_BASE_X + col * PILE_SLOT_W)) < 1.0:
+				var d := absf(item.position.y - (GROUND_Y - (h - 1) * MATERIAL_H))
+				if d < nearest_dist:
+					nearest_dist = d
+					nearest = item
+					break
+		if nearest != null:
+			var new_x := PILE_BASE_X + best_col * PILE_SLOT_W + randf_range(-0.5, 0.5)
+			var new_y := GROUND_Y - best_h * MATERIAL_H
+			nearest.target_x = new_x
+			var st := create_tween()
+			st.tween_property(nearest, "position:x", new_x, 0.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+			st.parallel().tween_property(nearest, "position:y", new_y, 0.2).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
 
 ## Визуальный сочный отклик на клик по Монолиту (сжатие-растяжение).
 func _squish_monolit() -> void:

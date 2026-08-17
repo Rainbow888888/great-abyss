@@ -145,8 +145,8 @@ func _on_monolit_input_event(_viewport: Node, event: InputEvent, _shape_idx: int
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		_drop_material(Vector2(335.0, 230.0))
 		_squish_monolit()
-		_passive_stats.material_amount *= 10
-		print("DEBUG: passive x10 -> %d" % _passive_stats.material_amount)
+		_passive_stats.material_amount = min(_passive_stats.material_amount * 10, 100)
+		print("Passive x10 -> %d" % _passive_stats.material_amount)
 
 func _on_passive_timer_timeout() -> void:
 	for i in _passive_stats.material_amount:

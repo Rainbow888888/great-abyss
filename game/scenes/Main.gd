@@ -152,23 +152,41 @@ func _on_autosave_timer_timeout() -> void:
 func _on_new_game_button_pressed() -> void:
 	if FileAccess.file_exists(SAVE_PATH):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
-	get_tree().call_deferred("change_scene_to_file", "res://game/scenes/Main.tscn")
+	for item in _dropped_materials:
+		item.queue_free()
+	_dropped_materials.clear()
+	_column_counts.clear()
+	if _carried != null:
+		_carried.queue_free()
+		_carried = null
+	_target_material = null
+	_carry_state = CarryState.IDLE
+	material_count = 0
+	_material_label.text = "В Бездне: 0"
+	_update_zasypka()
 
 ## Роняет осколок из точки добычи (у Монолита) на землю.
-## Материалы сначала стелются по земле (заполняют ряд слотёв),
-## потом наслаиваются друг на друга слоями по 6 px.
-const PILE_BASE_X := 310.0
-const PILE_SLOT_W := 8.0
-const PILE_MAX_COLS := 15
+## Куча-пирамида: осколки идут в случайный столбец с вероятностью
+## по центру (ближе к Монолиту), высота считается per-столбец.
+const PILE_BASE_X := 280.0
+const PILE_SLOT_W := 3.0
+const PILE_MAX_COLS := 40
+const MATERIAL_H := 1.2
+var _column_counts: Dictionary = {}
+
+func _pick_column() -> int:
+	var col := int(randf() * randf() * float(PILE_MAX_COLS))
+	return clampi(col, 0, PILE_MAX_COLS - 1)
+
 func _drop_material(from: Vector2, animate: bool = true) -> void:
 	var item: Polygon2D = MATERIAL_SCENE.instantiate()
 	item.position = from
-	var idx := _dropped_materials.size()
-	var col := idx % PILE_MAX_COLS
-	var layer := idx / PILE_MAX_COLS
-	var target_x := PILE_BASE_X + col * PILE_SLOT_W + randf_range(-1.5, 1.5)
+	var col := _pick_column()
+	var h := _column_counts.get(col, 0) as int
+	_column_counts[col] = h + 1
+	var target_x := PILE_BASE_X + col * PILE_SLOT_W + randf_range(-0.5, 0.5)
 	item.target_x = target_x
-	var target_y := GROUND_Y - layer * 6.0
+	var target_y := GROUND_Y - h * MATERIAL_H
 	add_child(item)
 	_dropped_materials.append(item)
 	if not animate:
@@ -178,7 +196,7 @@ func _drop_material(from: Vector2, animate: bool = true) -> void:
 	tween.set_parallel(true)
 	tween.tween_property(item, "position:x", target_x, 0.45).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	var y_tween := create_tween()
-	var peak_y := minf(from.y, target_y) - 40.0
+	var peak_y := minf(from.y, target_y) - 20.0
 	y_tween.tween_property(item, "position:y", peak_y, 0.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	y_tween.tween_property(item, "position:y", target_y, 0.25).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
 

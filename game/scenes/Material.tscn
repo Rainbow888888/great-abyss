@@ -5,4 +5,4 @@
 [node name="Material" type="Polygon2D"]
 script = ExtResource("1_mat")
 color = Color(0.79, 0.79, 0.74, 1)
-polygon = PackedVector2Array(-3, -3, 3, -3, 3, 3, -3, 3)
+polygon = PackedVector2Array(-0.6, -0.6, 0.6, -0.6, 0.6, 0.6, -0.6, 0.6)

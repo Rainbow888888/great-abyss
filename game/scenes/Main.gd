@@ -152,69 +152,35 @@ func _on_autosave_timer_timeout() -> void:
 func _on_new_game_button_pressed() -> void:
 	if FileAccess.file_exists(SAVE_PATH):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
-	get_tree().reload_current_scene()
+	get_tree().call_deferred("change_scene_to_file", "res://game/scenes/Main.tscn")
 
 ## Роняет осколок из точки добычи (у Монолита) на землю.
-## Осколки летят в красивой параболической дуге вправо и ложатся
-## на кучу (T0014, визуальная горка). Каждый новый осколок в радиусе 20 px
-## ложится на 6 px выше предыдущего.
+## Материалы сначала стелются по земле (заполняют ряд слотёв),
+## потом наслаиваются друг на друга слоями по 6 px.
+const PILE_BASE_X := 310.0
+const PILE_SLOT_W := 8.0
+const PILE_MAX_COLS := 15
 func _drop_material(from: Vector2, animate: bool = true) -> void:
 	var item: Polygon2D = MATERIAL_SCENE.instantiate()
 	item.position = from
-	var target_x := randf_range(350.0, 410.0)
+	var idx := _dropped_materials.size()
+	var col := idx % PILE_MAX_COLS
+	var layer := idx / PILE_MAX_COLS
+	var target_x := PILE_BASE_X + col * PILE_SLOT_W + randf_range(-1.5, 1.5)
 	item.target_x = target_x
-	var pile_h := _pile_height_at(target_x)
-	var target_y := GROUND_Y - pile_h
+	var target_y := GROUND_Y - layer * 6.0
 	add_child(item)
 	_dropped_materials.append(item)
 	if not animate:
 		item.position = Vector2(target_x, target_y)
 		return
-	
-	# Горизонтальное движение по синусоиде (плавно)
 	var tween := create_tween()
 	tween.set_parallel(true)
 	tween.tween_property(item, "position:x", target_x, 0.45).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	
-	# Вертикальное движение по параболической дуге (сначала вверх, потом вниз)
 	var y_tween := create_tween()
 	var peak_y := minf(from.y, target_y) - 40.0
 	y_tween.tween_property(item, "position:y", peak_y, 0.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	y_tween.tween_property(item, "position:y", target_y, 0.25).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
-
-## Высота кучи в заданной x-координате: считаем сколько осколков
-## уже лежит в радиусе 20 px, каждый добавляет 6 px высоты.
-## Считаем по target_x (куда осколок летит), а не по текущей позиции.
-func _pile_height_at(x: float) -> float:
-	var count := 0
-	for item in _dropped_materials:
-		if absf(item.target_x - x) <= 20.0:
-			count += 1
-	return count * 6.0
-
-## Осаживает кучу вниз, когда один из осколков забирают.
-## Предотвращает висение камней в воздухе, заставляя их плавно сползать.
-func _settle_pile() -> void:
-	var sorted := _dropped_materials.duplicate()
-	# Сортируем снизу вверх (по y по убыванию, то есть от земли вверх)
-	sorted.sort_custom(func(a, b): return a.position.y > b.position.y)
-	
-	var processed_items: Array[Polygon2D] = []
-	for item in sorted:
-		var count := 0
-		for proc in processed_items:
-			if absf(proc.target_x - item.target_x) <= 20.0:
-				count += 1
-		var target_y := GROUND_Y - (count * 6.0)
-		if absf(item.position.y - target_y) > 0.1:
-			if item.has_meta("settle_tween"):
-				var old_tween = item.get_meta("settle_tween")
-				if old_tween and old_tween.is_valid():
-					old_tween.kill()
-			var tween := create_tween()
-			item.set_meta("settle_tween", tween)
-			tween.tween_property(item, "position:y", target_y, 0.25).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-		processed_items.append(item)
 
 ## Визуальный сочный отклик на клик по Монолиту (сжатие-растяжение).
 func _squish_monolit() -> void:
@@ -246,7 +212,6 @@ func _process(delta: float) -> void:
 				_carried = _target_material
 				_target_material = null
 				_carry_state = CarryState.TO_ABYSS
-				_settle_pile()
 		CarryState.TO_ABYSS:
 			if _step_toward(THROW_X, delta):
 				_throw_carried()

@@ -119,16 +119,30 @@ offset_right = 1080.0
 offset_bottom = 120.0
 text = "Debug x10"
 
-[node name="DebugCarrierButton" type="Button" parent="./UI"]
+[node name="CapacityButton" type="Button" parent="./UI"]
 offset_left = 950.0
 offset_top = 176.0
 offset_right = 1140.0
 offset_bottom = 204.0
+text = "Носить больше [12]"
+
+[node name="DebugCarrierButton" type="Button" parent="./UI"]
+offset_left = 950.0
+offset_top = 224.0
+offset_right = 1140.0
+offset_bottom = 252.0
 text = "Носильщик (debug)"
 
 [node name="DebugSpeedButton" type="Button" parent="./UI"]
 offset_left = 950.0
-offset_top = 212.0
+offset_top = 260.0
 offset_right = 1140.0
-offset_bottom = 240.0
+offset_bottom = 288.0
 text = "Обучить бегу (debug)"
+
+[node name="DebugCapacityButton" type="Button" parent="./UI"]
+offset_left = 950.0
+offset_top = 296.0
+offset_right = 1140.0
+offset_bottom = 324.0
+text = "Носить больше (debug)"

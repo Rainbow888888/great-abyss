@@ -10,3 +10,7 @@ speed_cost_base = 5
 speed_cost_growth = 2.0
 speed_bonus = 15.0
 max_level = 3
+capacity_cost_base = 12
+capacity_cost_growth = 2.0
+capacity_bonus = 1
+max_capacity_level = 4

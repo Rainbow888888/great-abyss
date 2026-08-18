@@ -25,3 +25,13 @@ class_name UpgradeStats
 
 ## Максимальный уровень скорости.
 @export var max_level: int = 3
+
+## Вместимость — вторая ось транспорта. В Gnorp Apologue логистику
+## качают и по скорости, и по вместимости; одна ходка = один осколок
+## была настоящим потолком, скорость его не снимала.
+@export var capacity_cost_base: int = 12
+@export var capacity_cost_growth: float = 2.0
+
+## Сколько осколков носильщик берёт за ходку сверх одного.
+@export var capacity_bonus: int = 1
+@export var max_capacity_level: int = 4

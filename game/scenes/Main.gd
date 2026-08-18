@@ -59,7 +59,7 @@ const SAVE_PATH := "user://save.json"
 
 ## Меняется, когда меняется состав сохраняемых данных. Сейв чужой
 ## версии отбрасывается — начинается новая игра.
-const SAVE_VERSION := 2
+const SAVE_VERSION := 3
 
 ## Интервал автосейва. Технический параметр (частота записи), а не
 ## баланс игры, поэтому константа в коде, а не в `.tres`.
@@ -74,11 +74,15 @@ var material_count := 0
 ## апгрейда — сам ресурс не трогаем.
 var carry_speed := 0.0
 
+## Сколько осколков носильщик берёт за одну ходку.
+var carry_capacity := 1
+
 @onready var _material_label: Label = $UI/MaterialLabel
 @onready var _shard_label: Label = $UI/ShardLabel
 @onready var _chronicle_label: Label = $UI/ChronicleLabel
 @onready var _upgrade_button: Button = $UI/UpgradeButton
 @onready var _carrier_button: Button = $UI/CreateCarrierButton
+@onready var _capacity_button: Button = $UI/CapacityButton
 @onready var _monolit: Area2D = $Monolit
 @onready var _gruhr_passive: Polygon2D = $GruhrPassive
 @onready var _bezdna: Polygon2D = $Bezdna
@@ -104,6 +108,7 @@ var _columns: Array = []
 ## редактор, и при запуске сцены скриптом его может не быть.
 var _carriers: Array[Node2D] = []
 var _carry_level := 0
+var _capacity_level := 0
 var _is_debug_mode := false
 var _pylesos_active := false
 
@@ -124,6 +129,8 @@ func _ready() -> void:
 	$UI/CreateCarrierButton.pressed.connect(_on_create_carrier_button_pressed)
 	$UI/DebugCarrierButton.pressed.connect(_on_debug_carrier_button_pressed)
 	$UI/DebugSpeedButton.pressed.connect(_on_debug_speed_button_pressed)
+	$UI/CapacityButton.pressed.connect(_on_capacity_button_pressed)
+	$UI/DebugCapacityButton.pressed.connect(_on_debug_capacity_button_pressed)
 	_reclaim_timer.timeout.connect(_on_reclaim_timer_timeout)
 	_reclaim_timer.wait_time = _abyss_stats.reclaim_interval
 	_reclaim_timer.start()
@@ -159,6 +166,7 @@ func save_game() -> void:
 		"material_count": material_count,
 		"lying_materials": get_tree().get_nodes_in_group("shards").size(),
 		"carry_level": _carry_level,
+		"capacity_level": _capacity_level,
 		"carriers": _carriers.size(),
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
@@ -193,7 +201,10 @@ func load_game() -> void:
 		push_warning("Версия сейва не совпадает, начинаем заново")
 		return
 	material_count = int(data.get("material_count", 0))
-	_carry_level = clampi(int(data.get("carry_level", 0)), 0, _upgrade_stats.max_level)
+	# Верхняя граница — отладочная, а не платная: уровни, накрученные
+	# debug-кнопкой, тоже должны переживать перезапуск.
+	_carry_level = clampi(int(data.get("carry_level", 0)), 0, DEBUG_MAX_LEVEL)
+	_capacity_level = clampi(int(data.get("capacity_level", 0)), 0, DEBUG_MAX_LEVEL)
 	for i in int(data.get("lying_materials", 0)):
 		_drop_material(SHARD_ORIGIN, false)
 	for i in maxi(int(data.get("carriers", 1)) - 1, 0):
@@ -455,7 +466,14 @@ func _update_buttons() -> void:
 	var carrier_cost := _carrier_cost()
 	_carrier_button.text = "Новый носильщик [%d]" % carrier_cost
 	_carrier_button.disabled = _pile_size() < carrier_cost
-	_shard_label.text = "Осколков в куче: %d" % _pile_size()
+	if _capacity_level >= _upgrade_stats.max_capacity_level:
+		_capacity_button.text = "Носить больше [МАКС]"
+		_capacity_button.disabled = true
+	else:
+		var cap_cost := _capacity_cost()
+		_capacity_button.text = "Носить больше [%d]" % cap_cost
+		_capacity_button.disabled = _pile_size() < cap_cost
+	_shard_label.text = "Осколков в куче: %d (по %d за ходку)" % [_pile_size(), carry_capacity]
 
 ## Куча меняется от многих причин — добычи, переноски, воровства, трат.
 ## Дёргать кнопки на каждое событие было бы россыпью вызовов, поэтому
@@ -472,6 +490,26 @@ func _process(_delta: float) -> void:
 ## иначе она пережила бы «Новую игру» и росла бы бесконечно.
 func _apply_carry_speed() -> void:
 	carry_speed = _gruhr_stats.carry_speed + _carry_level * _upgrade_stats.speed_bonus
+	carry_capacity = 1 + _capacity_level * _upgrade_stats.capacity_bonus
+
+func _capacity_cost() -> int:
+	return int(round(_upgrade_stats.capacity_cost_base * pow(_upgrade_stats.capacity_cost_growth, _capacity_level)))
+
+func _on_capacity_button_pressed() -> void:
+	if _capacity_level >= _upgrade_stats.max_capacity_level:
+		return
+	if not _spend_shards(_capacity_cost()):
+		return
+	_capacity_level += 1
+	_apply_carry_speed()
+	_update_buttons()
+
+func _on_debug_capacity_button_pressed() -> void:
+	if _capacity_level >= DEBUG_MAX_LEVEL:
+		return
+	_capacity_level += 1
+	_apply_carry_speed()
+	_update_buttons()
 
 ## Валюта — осколки в куче, а не брошенное в Бездну. Брошенное отдано
 ## насовсем: доставать подношения обратно, чтобы обучить Грухра бегу,
@@ -539,8 +577,13 @@ func _update_upgrade_button() -> void:
 func _on_debug_carrier_button_pressed() -> void:
 	_spawn_carrier()
 
+## Отладочный предел уровней. Платная кнопка держится за `max_level`,
+## отладочная — нет: ей нужно уметь загнать скорость далеко за границу,
+## чтобы посмотреть, как ведёт себя игра на поздних стадиях.
+const DEBUG_MAX_LEVEL := 100
+
 func _on_debug_speed_button_pressed() -> void:
-	if _carry_level >= _upgrade_stats.max_level:
+	if _carry_level >= DEBUG_MAX_LEVEL:
 		return
 	_carry_level += 1
 	_apply_carry_speed()

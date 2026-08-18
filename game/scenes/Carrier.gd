@@ -1,8 +1,9 @@
 extends Polygon2D
 class_name Carrier
 
-## Носильщик. Сам находит ближайший осколок, идёт к нему, поднимает
-## силой мысли и несёт к краю Бездны.
+## Носильщик. Сам находит ближайшие осколки, поднимает их силой мысли
+## и несёт к краю Бездны. За ходку берёт столько, сколько позволяет
+## вместимость — вторая ось транспорта наравне со скоростью.
 ##
 ## Состояние у каждого носильщика своё, поэтому их может быть много.
 ## Осколок «застолблён» с момента выбора цели: Main выдаёт его из общей
@@ -10,13 +11,14 @@ class_name Carrier
 
 enum State { IDLE, TO_MATERIAL, TO_ABYSS }
 
-## Осколок висит над носильщиком, а не в руках: Светлые переносят
-## мыслью (`docs/02_World/LightCivilization.md`).
-const CARRY_OFFSET := Vector2(0, -14)
+## Осколки висят над носильщиком дугой, а не лежат в руках: Светлые
+## переносят мыслью (`docs/02_World/LightCivilization.md`).
+const ORBIT_RADIUS := 17.0
+const ORBIT_SPREAD := 0.5
 
 var _state: State = State.IDLE
 var _target: Area2D = null
-var _carried: Area2D = null
+var _carried: Array[Area2D] = []
 var _main: Node = null
 var _throw_x := 0.0
 
@@ -34,22 +36,39 @@ func _process(delta: float) -> void:
 			_target = _main.claim_nearest_material(position.x)
 			if _target != null:
 				_state = State.TO_MATERIAL
+			elif not _carried.is_empty():
+				# Осколков больше нет — несём то, что уже набрали,
+				# иначе носильщик простоит с грузом в руках.
+				_state = State.TO_ABYSS
 		State.TO_MATERIAL:
 			if not is_instance_valid(_target):
 				_target = null
 				_state = State.IDLE
 			elif _step_toward(_target.position.x, delta):
-				_carried = _target
+				_carried.append(_target)
 				_target = null
-				_state = State.TO_ABYSS
+				_state = State.TO_ABYSS if _is_full() else State.IDLE
 		State.TO_ABYSS:
 			if _step_toward(_throw_x, delta):
-				var item := _carried
-				_carried = null
+				for item in _carried:
+					_main.deliver_material(item)
+				_carried.clear()
 				_state = State.IDLE
-				_main.deliver_material(item)
-	if _carried != null:
-		_carried.position = position + CARRY_OFFSET
+	_hold_carried()
+
+func _is_full() -> bool:
+	return _carried.size() >= maxi(int(_main.carry_capacity), 1)
+
+## Раскладывает груз дугой над головой — по одному осколку видно, что
+## носильщик несёт один, по пяти видно, что пять.
+func _hold_carried() -> void:
+	for i in _carried.size():
+		var item: Area2D = _carried[i]
+		if not is_instance_valid(item):
+			continue
+		var offset := (i - (_carried.size() - 1) * 0.5) * ORBIT_SPREAD
+		var angle := -PI * 0.5 + offset
+		item.position = position + Vector2(cos(angle), sin(angle)) * ORBIT_RADIUS
 
 ## Двигает носильщика к цели по горизонтали. true — дошёл.
 func _step_toward(target_x: float, delta: float) -> bool:
@@ -62,11 +81,12 @@ func _step_toward(target_x: float, delta: float) -> bool:
 	return false
 
 ## Носильщик исчезает (перезапуск сцены) — вернуть груз в общую кучу,
-## иначе осколок повиснет ничей и его никто не заберёт.
+## иначе осколки повиснут ничьи и их никто не заберёт.
 func _exit_tree() -> void:
 	if _main == null:
 		return
 	if is_instance_valid(_target):
 		_main.release_material(_target)
-	if is_instance_valid(_carried):
-		_main.release_material(_carried)
+	for item in _carried:
+		if is_instance_valid(item):
+			_main.release_material(item)

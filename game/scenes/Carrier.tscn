@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/scenes/Carrier.gd" id="1_carrier"]
+
+[node name="Carrier" type="Polygon2D"]
+color = Color(0.65, 0.85, 0.55, 1)
+polygon = PackedVector2Array(8.000, 0.000, 6.928, 4.000, 4.000, 6.928, 0.000, 8.000, -4.000, 6.928, -6.928, 4.000, -8.000, 0.000, -6.928, -4.000, -4.000, -6.928, 0.000, -8.000, 4.000, -6.928, 6.928, -4.000)
+script = ExtResource("1_carrier")

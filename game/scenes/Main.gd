@@ -2,16 +2,21 @@ extends Node2D
 
 ## Прототип светлого экрана.
 ##
-## Цикл: клик по Священному Монолиту или молитва пассивного Грухра
-## выбивает осколок материала, который падает на поверхность → Грухр-
-## носильщик подхватывает его силой мысли, несёт к краю Бездны
-## и сбрасывает → счётчик растёт, Бездна пульсирует.
+## Цикл: клик по Священному Монолиту или молитва добытчика выбивает
+## осколок, который падает в кучу на поверхности → носильщик подхватывает
+## его силой мысли и несёт к краю Бездны → счётчик растёт, Бездна пульсирует.
 ##
 ## Монолит — первый источник засыпания, Первокамень
-## (`docs/03_Gameplay/FillSources.md`). Светлые не копают землю —
-## они выбивают материал верой и молитвой. Вид — разрез сбоку (ADR-003).
+## (`docs/03_Gameplay/FillSources.md`). Светлые не копают землю и не бьют
+## камень руками — они выбивают материал молитвой, и переносят тоже мыслью
+## (`docs/02_World/LightCivilization.md`). Вид — разрез сбоку (ADR-003).
+##
+## Важно: `.tres` — только значения по умолчанию, читаются и не меняются.
+## Всё, что меняется по ходу партии, живёт в переменных ниже. Ресурсы
+## кэшируются движком, и запись в них переживала бы «Новую игру».
 
 const MATERIAL_SCENE := preload("res://game/scenes/Material.tscn")
+const CARRIER_SCENE := preload("res://game/scenes/Carrier.tscn")
 
 ## Линия поверхности в разрезе (ADR-003). Всё, что стоит на земле,
 ## стоит на ней; ниже — массив земли и полость Бездны.
@@ -23,96 +28,103 @@ const GROUND_Y := SURFACE_Y - 3.0
 ## Куда носильщик доходит, чтобы сбросить груз: у левой кромки зева.
 const THROW_X := 590.0
 
+## Правая грань Монолита — точка, куда бьёт молитва и откуда летит осколок.
+const SHARD_ORIGIN := Vector2(335.0, 230.0)
+
+## Куча осколков: ложится справа от добытчика, между ним и Бездной.
+const PILE_CENTER_X := 380.0
+const PILE_SPREAD := 120.0
+const MATERIAL_H := 4.8
+const PILE_RADIUS := 10.0
+
 const SAVE_PATH := "user://save.json"
 
 ## Меняется, когда меняется состав сохраняемых данных. Сейв чужой
 ## версии отбрасывается — начинается новая игра.
-const SAVE_VERSION := 1
+const SAVE_VERSION := 2
 
 ## Интервал автосейва. Технический параметр (частота записи), а не
 ## баланс игры, поэтому константа в коде, а не в `.tres`.
 const AUTOSAVE_INTERVAL := 10.0
 
-enum CarryState { IDLE, TO_MATERIAL, TO_ABYSS }
+## Сколько осколков даёт один клик в режиме отладки.
+const DEBUG_CLICK_BURST := 10
 
 var material_count := 0
 
+## Текущая скорость носильщиков. Считается из базы в `.tres` и уровня
+## апгрейда — сам ресурс не трогаем.
+var carry_speed := 0.0
+
 @onready var _material_label: Label = $UI/MaterialLabel
 @onready var _chronicle_label: Label = $UI/ChronicleLabel
+@onready var _upgrade_button: Button = $UI/UpgradeButton
+@onready var _carrier_button: Button = $UI/CreateCarrierButton
 @onready var _monolit: Area2D = $Monolit
-@onready var _gruhr: Polygon2D = $Gruhr
 @onready var _gruhr_passive: Polygon2D = $GruhrPassive
-@onready var _kyrka: Node2D = $GruhrPassive/Kyrka
 @onready var _bezdna: Polygon2D = $Bezdna
 @onready var _zasypka: Polygon2D = $Bezdna/Zasypka
 @onready var _passive_timer: Timer = $PassiveTimer
 @onready var _autosave_timer: Timer = $AutosaveTimer
 
-var _gruhr_passive_base_y: float
 var _passive_stats := preload("res://game/resources/PassiveGruhrStats.tres")
-var _is_debug_mode := false
 var _abyss_stats := preload("res://game/resources/AbyssStats.tres")
 var _gruhr_stats := preload("res://game/resources/GruhrStats.tres")
 var _upgrade_stats := preload("res://game/resources/UpgradeStats.tres")
 var _chronicle_entries: Resource = preload("res://game/resources/ChronicleEntries.tres")
 
-## Лежащие на поверхности осколки, ждущие носильщика.
+## Осколки, лежащие на поверхности и никем не занятые. Как только
+## носильщик выбрал осколок, тот уходит из этого списка — иначе двое
+## побегут за одним.
 var _dropped_materials: Array[Area2D] = []
 
-var _carry_state: CarryState = CarryState.IDLE
-var _target_material: Area2D = null
-var _carried: Area2D = null
+## Тип — Node2D, а не Carrier: глобальное имя класса регистрирует
+## редактор, и при запуске сцены скриптом его может не быть.
+var _carriers: Array[Node2D] = []
 var _carry_level := 0
+var _is_debug_mode := false
 
 func _ready() -> void:
 	_monolit.input_event.connect(_on_monolit_input_event)
 	_passive_timer.timeout.connect(_on_passive_timer_timeout)
 	_autosave_timer.timeout.connect(_on_autosave_timer_timeout)
-	var new_game_btn: Button = $UI/NewGameButton
-	new_game_btn.pressed.connect(_on_new_game_button_pressed)
-	var upgrade_btn: Button = $UI/UpgradeButton
-	upgrade_btn.pressed.connect(_on_upgrade_button_pressed)
-	var debug_btn: Button = $UI/DebugButton
-	debug_btn.pressed.connect(_on_debug_button_pressed)
-	var create_carrier_btn: Button = $UI/CreateCarrierButton
-	create_carrier_btn.pressed.connect(_on_create_carrier_button_pressed)
-	_gruhr_passive_base_y = _gruhr_passive.position.y
+	$UI/NewGameButton.pressed.connect(_on_new_game_button_pressed)
+	$UI/UpgradeButton.pressed.connect(_on_upgrade_button_pressed)
+	$UI/DebugButton.pressed.connect(_on_debug_button_pressed)
+	$UI/CreateCarrierButton.pressed.connect(_on_create_carrier_button_pressed)
+
+	var first_carrier: Node2D = $Gruhr
+	first_carrier.setup(self, THROW_X)
+	_carriers.append(first_carrier)
+
 	_passive_timer.wait_time = _passive_stats.interval
 	_passive_timer.start()
 	_autosave_timer.wait_time = AUTOSAVE_INTERVAL
 	_autosave_timer.start()
+
 	load_game()
-	_start_kyrka_animation()
+	_apply_carry_speed()
+	_start_prayer_idle()
 	_material_label.text = "В Бездне: %d" % material_count
 	_update_zasypka()
-	_update_upgrade_button()
-
-func _start_kyrka_animation() -> void:
-	if _kyrka == null:
-		return
-	var tween := create_tween().set_loops()
-	# Замах назад (медленно)
-	tween.tween_property(_kyrka, "rotation", -0.8, 0.6).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	# Удар вперед (быстро)
-	tween.tween_property(_kyrka, "rotation", 0.8, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	# Плавный возврат в дефолтное положение
-	tween.tween_property(_kyrka, "rotation", -0.5, 0.45).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	_update_buttons()
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
 		save_game()
 		get_tree().quit()
 
-## Сохраняем два числа: сколько брошено и сколько лежит. Координаты
-## лежащих объектов — косметика, при загрузке рассыпаются заново.
+# --- Сохранение ---------------------------------------------------------
+
+## Сохраняем только числа. Координаты осколков — косметика, при загрузке
+## куча складывается заново; фаза ходьбы носильщика смысла не имеет.
 func save_game() -> void:
-	var lying := _dropped_materials.size()
-	if _carried != null:
-		lying += 1
 	var data := {
 		"version": SAVE_VERSION,
 		"material_count": material_count,
-		"lying_materials": lying,
+		"lying_materials": get_tree().get_nodes_in_group("shards").size(),
+		"carry_level": _carry_level,
+		"carriers": _carriers.size(),
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file == null:
@@ -120,7 +132,6 @@ func save_game() -> void:
 		return
 	file.store_string(JSON.stringify(data))
 	file.close()
-	print("Сохранено: брошено ", material_count, ", лежит ", lying)
 
 ## Любая проблема с сейвом — молча начинаем новую игру, без падения.
 func load_game() -> void:
@@ -137,108 +148,79 @@ func load_game() -> void:
 	var json := JSON.new()
 	if json.parse(text) != OK:
 		return
+	# Валидный JSON может быть не словарём (число, строка, массив) —
+	# без этой проверки присваивание в Dictionary роняет игру.
+	if typeof(json.data) != TYPE_DICTIONARY:
+		push_warning("Сейв не того формата, начинаем заново")
+		return
 	var data: Dictionary = json.data
 	if int(data.get("version", 0)) != SAVE_VERSION:
 		push_warning("Версия сейва не совпадает, начинаем заново")
 		return
 	material_count = int(data.get("material_count", 0))
+	_carry_level = clampi(int(data.get("carry_level", 0)), 0, _upgrade_stats.max_level)
 	for i in int(data.get("lying_materials", 0)):
-		_drop_material(Vector2(335.0, 230.0), false)
-	print("Загружено: брошено ", material_count, ", лежит ", _dropped_materials.size())
+		_drop_material(SHARD_ORIGIN, false)
+	for i in maxi(int(data.get("carriers", 1)) - 1, 0):
+		_spawn_carrier()
+
+# --- Добыча -------------------------------------------------------------
 
 func _on_monolit_input_event(_viewport: Node, event: InputEvent, _shape_idx: int) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		_squish_monolit()
-		if _is_debug_mode:
-			for i in range(_passive_stats.material_amount):
-				_drop_material(Vector2(335.0, 230.0))
-		else:
-			_drop_material(Vector2(335.0, 230.0))
-		print("Debug mode: %s" % _is_debug_mode)
+		var count := DEBUG_CLICK_BURST if _is_debug_mode else 1
+		for i in count:
+			_drop_material(SHARD_ORIGIN)
 
+## Добытчик молится: искра летит от него к Монолиту, и только по её
+## прилёту откалывается осколок. Цепочка «кто → куда → что» должна быть
+## видна, иначе материал берётся из пустоты.
 func _on_passive_timer_timeout() -> void:
-	for i in _passive_stats.material_amount:
-		_drop_material(Vector2(335.0, 230.0))
-	_jump(_gruhr_passive, _gruhr_passive_base_y)
+	var spark := Polygon2D.new()
+	spark.color = Color(0.95, 0.95, 0.78, 1)
+	var pts := PackedVector2Array()
+	pts.push_back(Vector2(0, -5))
+	pts.push_back(Vector2(3, 0))
+	pts.push_back(Vector2(0, 5))
+	pts.push_back(Vector2(-3, 0))
+	spark.polygon = pts
+	spark.position = _gruhr_passive.position + Vector2(0, -12)
+	add_child(spark)
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(spark, "position", SHARD_ORIGIN, 0.25).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	tween.tween_property(spark, "scale", Vector2(0.4, 0.4), 0.25)
+	tween.finished.connect(func() -> void:
+		spark.queue_free()
+		_squish_monolit()
+		for i in _passive_stats.material_amount:
+			_drop_material(SHARD_ORIGIN)
+	)
 
-## Автосейв по таймеру: не терять прогресс при падении игры или
-## выключении машины, а не только при честном закрытии окна.
-func _on_autosave_timer_timeout() -> void:
-	save_game()
+## Добытчик всё время в молитве — медленное дыхание на месте.
+func _start_prayer_idle() -> void:
+	var tween := create_tween().set_loops()
+	tween.tween_property(_gruhr_passive, "scale", Vector2(1.12, 0.9), 0.9).set_trans(Tween.TRANS_SINE)
+	tween.tween_property(_gruhr_passive, "scale", Vector2(1.0, 1.0), 0.9).set_trans(Tween.TRANS_SINE)
 
-func _on_new_game_button_pressed() -> void:
-	if FileAccess.file_exists(SAVE_PATH):
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
-	get_tree().reload_current_scene()
-
-func _on_upgrade_button_pressed() -> void:
-	if _carry_level >= _upgrade_stats.max_level:
-		return
-	var cost := _upgrade_stats.cost_per_level
-	if material_count < cost:
-		return
-	material_count -= cost
-	_carry_level += 1
-	_gruhr_stats.carry_speed += _upgrade_stats.speed_bonus
-	_material_label.text = "В Бездне: %d" % material_count
-	_update_upgrade_button()
-	print("UPGRADE lv=%d speed=%.1f" % [_carry_level, _gruhr_stats.carry_speed])
-
-func _on_create_carrier_button_pressed() -> void:
-	var new_carrier: Node2D = Node2D.new()
-	new_carrier.position = Vector2(_gruhr.position.x + 50.0, _gruhr.position.y)
-	add_child(new_carrier)
-	var sprite: Polygon2D = Polygon2D.new()
-	sprite.color = Color(0.65, 0.85, 0.55, 1) # Same as Gruhr
-	var arr := PackedVector2Array()
-	arr.push_back(Vector2(8.0, 0.0))
-	arr.push_back(Vector2(6.928, 4.0))
-	arr.push_back(Vector2(4.0, 6.928))
-	arr.push_back(Vector2(0.0, 8.0))
-	arr.push_back(Vector2(-4.0, 6.928))
-	arr.push_back(Vector2(-6.928, 4.0))
-	arr.push_back(Vector2(-8.0, 0.0))
-	arr.push_back(Vector2(-6.928, -4.0))
-	arr.push_back(Vector2(-4.0, -6.928))
-	arr.push_back(Vector2(0.0, -8.0))
-	arr.push_back(Vector2(4.0, -6.928))
-	arr.push_back(Vector2(6.928, -4.0))
-	sprite.polygon = arr
-	new_carrier.add_child(sprite)
-	print("Created additional carrier at", new_carrier.position)
-
-func _on_debug_button_pressed() -> void:
-	_is_debug_mode = not _is_debug_mode
-	_passive_stats.material_amount = min(_passive_stats.material_amount * 10, 100)
-	_passive_timer.wait_time = _passive_stats.interval
-	print("DEBUG mode: %s -> passive x10 -> %d" % [_is_debug_mode, _passive_stats.material_amount])
-
-## Роняет осколок из точки добычи (у Монолита) на землю.
-## Хаотичная горка: каждый осколок летит в случайную точку
-## от Монолита вправо, высота — по количеству соседей в радиусе.
-const PILE_CENTER_X := 350.0
-const PILE_SPREAD := 120.0
-const MATERIAL_H := 4.8
-const PILE_RADIUS := 10.0
-
+## Осколок летит дугой от Монолита и ложится в кучу. Высота места
+## посадки зависит от того, сколько осколков уже лежит рядом.
 func _drop_material(from: Vector2, animate: bool = true) -> void:
 	var item: Area2D = MATERIAL_SCENE.instantiate()
 	item.position = from
 	var target_x := PILE_CENTER_X + randf_range(-30.0, PILE_SPREAD)
 	item.target_x = target_x
-	var pile_h := _pile_height_at(target_x)
-	var target_y := GROUND_Y - pile_h
+	var target_y := GROUND_Y - _pile_height_at(target_x)
 	add_child(item)
 	_dropped_materials.append(item)
 	if not animate:
 		item.position = Vector2(target_x, target_y)
 		return
-	var tween := create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(item, "position:x", target_x, 0.45).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	var x_tween := create_tween()
+	x_tween.tween_property(item, "position:x", target_x, 0.45).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	var y_tween := create_tween()
-	var peak_y := minf(from.y, target_y) - 20.0
-	y_tween.tween_property(item, "position:y", peak_y, 0.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	y_tween.tween_property(item, "position:y", minf(from.y, target_y) - 20.0, 0.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	y_tween.tween_property(item, "position:y", target_y, 0.25).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
 
 func _pile_height_at(x: float) -> float:
@@ -248,81 +230,120 @@ func _pile_height_at(x: float) -> float:
 			count += 1
 	return count * MATERIAL_H
 
-## Визуальный сочный отклик на клик по Монолиту (сжатие-растяжение).
+## Визуальный отклик Монолита на удар молитвы.
 func _squish_monolit() -> void:
-	if _monolit == null:
-		return
 	if _monolit.has_meta("squish_tween"):
-		var old_tween = _monolit.get_meta("squish_tween")
-		if old_tween and old_tween.is_valid():
-			old_tween.kill()
+		var old: Variant = _monolit.get_meta("squish_tween")
+		if old is Tween and old.is_valid():
+			old.kill()
 	var tween := create_tween()
 	_monolit.set_meta("squish_tween", tween)
 	_monolit.scale = Vector2(0.95, 1.05)
 	tween.tween_property(_monolit, "scale", Vector2(1.0, 1.0), 0.15).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
 
-## Носильщик: один Грухр, один объект за раз, ближайший к себе.
-func _process(delta: float) -> void:
-	match _carry_state:
-		CarryState.IDLE:
-			if not _dropped_materials.is_empty():
-				_target_material = _nearest_to_gruhr()
-				_carry_state = CarryState.TO_MATERIAL
-		CarryState.TO_MATERIAL:
-			if not is_instance_valid(_target_material):
-				_target_material = null
-				_carry_state = CarryState.IDLE
-			elif _step_toward(_target_material.position.x, delta):
-				_dropped_materials.erase(_target_material)
-				_carried = _target_material
-				_target_material = null
-				_carry_state = CarryState.TO_ABYSS
-		CarryState.TO_ABYSS:
-			if _step_toward(THROW_X, delta):
-				_throw_carried()
-	if _carried != null:
-		_carried.position = _gruhr.position + Vector2(0, -12)
+# --- Носильщики ---------------------------------------------------------
 
-## Двигает носильщика к цели по горизонтали. true — дошёл.
-func _step_toward(target_x: float, delta: float) -> bool:
-	var dx := target_x - _gruhr.position.x
-	var step := _gruhr_stats.carry_speed * delta
-	if absf(dx) <= step:
-		_gruhr.position.x = target_x
-		return true
-	_gruhr.position.x += signf(dx) * step
-	return false
-
-func _nearest_to_gruhr() -> Area2D:
+## Выдаёт носильщику ближайший свободный осколок и сразу убирает его из
+## общей кучи, чтобы за одним осколком не побежали двое.
+func claim_nearest_material(from_x: float) -> Area2D:
 	var best: Area2D = null
 	var best_d := INF
 	for m in _dropped_materials:
-		var d := absf(m.position.x - _gruhr.position.x)
+		var d := absf(m.position.x - from_x)
 		if d < best_d:
 			best_d = d
 			best = m
+	if best != null:
+		_dropped_materials.erase(best)
 	return best
 
-func _throw_carried() -> void:
-	var item := _carried
-	_carried = null
-	_carry_state = CarryState.IDLE
+## Носильщик отказался от осколка (например, исчез сам) — вернуть в кучу.
+func release_material(item: Area2D) -> void:
+	if is_instance_valid(item) and not _dropped_materials.has(item):
+		_dropped_materials.append(item)
+
+## Носильщик донёс осколок до зева и отпустил его.
+func deliver_material(item: Area2D) -> void:
 	material_count += 1
 	_material_label.text = "В Бездне: %d" % material_count
-	_update_upgrade_button()
-	print("Брошено в Бездну: ", material_count)
+	_update_buttons()
 	_check_chronicle()
-	var landing := Vector2(_bezdna.position.x - 40.0, _bezdna.position.y + _zasypka_top_y())
-	var tween := create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(item, "position", landing, 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	tween.tween_property(item, "scale", Vector2.ZERO, 0.5)
-	tween.finished.connect(item.queue_free)
+	if is_instance_valid(item):
+		var landing := Vector2(_bezdna.position.x - 40.0, _bezdna.position.y + _zasypka_top_y())
+		var tween := create_tween()
+		tween.set_parallel(true)
+		tween.tween_property(item, "position", landing, 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		tween.tween_property(item, "scale", Vector2.ZERO, 0.5)
+		tween.finished.connect(item.queue_free)
 	_pulse_bezdna()
 	_update_zasypka()
 
-## Летописец: проходим по записям и показываем первую сработавшую.
-## Пороги и текст в .tres (ChronicleEntries.tres) — не в коде.
+func _spawn_carrier() -> void:
+	var carrier: Node2D = CARRIER_SCENE.instantiate()
+	carrier.position = Vector2(PILE_CENTER_X + randf_range(-40.0, 60.0), SURFACE_Y - 8.0)
+	add_child(carrier)
+	carrier.setup(self, THROW_X)
+	_carriers.append(carrier)
+
+func _on_create_carrier_button_pressed() -> void:
+	if material_count < _upgrade_stats.carrier_cost:
+		return
+	material_count -= _upgrade_stats.carrier_cost
+	_spawn_carrier()
+	_material_label.text = "В Бездне: %d" % material_count
+	_update_zasypka()
+	_update_buttons()
+
+func _update_buttons() -> void:
+	_update_upgrade_button()
+	_carrier_button.text = "Новый носильщик [%d]" % _upgrade_stats.carrier_cost
+	_carrier_button.disabled = material_count < _upgrade_stats.carrier_cost
+
+# --- Апгрейды и кнопки --------------------------------------------------
+
+## Скорость выводится из базы и уровня, а не накапливается в ресурсе:
+## иначе она пережила бы «Новую игру» и росла бы бесконечно.
+func _apply_carry_speed() -> void:
+	carry_speed = _gruhr_stats.carry_speed + _carry_level * _upgrade_stats.speed_bonus
+
+func _on_upgrade_button_pressed() -> void:
+	if _carry_level >= _upgrade_stats.max_level:
+		return
+	if material_count < _upgrade_stats.cost_per_level:
+		return
+	material_count -= _upgrade_stats.cost_per_level
+	_carry_level += 1
+	_apply_carry_speed()
+	_material_label.text = "В Бездне: %d" % material_count
+	_update_zasypka()
+	_update_buttons()
+
+func _update_upgrade_button() -> void:
+	if _carry_level >= _upgrade_stats.max_level:
+		_upgrade_button.text = "Обучить бегу [МАКС]"
+		_upgrade_button.disabled = true
+		return
+	_upgrade_button.text = "Обучить бегу [%d]" % _upgrade_stats.cost_per_level
+	_upgrade_button.disabled = material_count < _upgrade_stats.cost_per_level
+
+## Отладка влияет только на силу клика и ничего не меняет в экономике —
+## иначе выключение режима не возвращало бы игру в исходное состояние.
+func _on_debug_button_pressed() -> void:
+	_is_debug_mode = not _is_debug_mode
+	$UI/DebugButton.text = "Debug x%d ВКЛ" % DEBUG_CLICK_BURST if _is_debug_mode else "Debug x%d" % DEBUG_CLICK_BURST
+
+func _on_new_game_button_pressed() -> void:
+	if FileAccess.file_exists(SAVE_PATH):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
+	get_tree().reload_current_scene()
+
+func _on_autosave_timer_timeout() -> void:
+	save_game()
+
+# --- Летописец ----------------------------------------------------------
+
+## Проходим по записям и показываем первую сработавшую.
+## Пороги и текст в `ChronicleEntries.tres` — не в коде.
 func _check_chronicle() -> void:
 	for entry in _chronicle_entries.entries:
 		if _chronicle_hit(entry):
@@ -331,8 +352,7 @@ func _check_chronicle() -> void:
 			return
 
 ## Числа совпадают с enum ChronicleEntry.Trigger: 0 = первое подношение,
-## 1 = N-й материал, 2 = половина ёмкости. Хардкод допустим — enum и
-## ресурс меняются вместе в одном файле.
+## 1 = N-й материал, 2 = половина ёмкости.
 func _chronicle_hit(entry: Resource) -> bool:
 	match entry.trigger:
 		0:
@@ -343,20 +363,11 @@ func _chronicle_hit(entry: Resource) -> bool:
 			return material_count == _abyss_stats.capacity / 2
 	return false
 
+# --- Бездна -------------------------------------------------------------
+
 ## Уровень засыпки: главный видимый прогресс игры. Форма берётся
 ## из самой полости Бездны, чтобы засыпка ложилась по её стенкам,
-## а не торчала прямоугольником. Один цвет; слои по типам материала
-## ждут появления самих типов (`docs/02_World/Abyss.md`).
-func _update_upgrade_button() -> void:
-	var btn: Button = $UI/UpgradeButton
-	if _carry_level >= _upgrade_stats.max_level:
-		btn.text = "Обучить бегу [МАКС]"
-		btn.disabled = true
-	else:
-		var cost := _upgrade_stats.cost_per_level
-		btn.text = "Обучить бегу [%d]" % cost
-		btn.disabled = material_count < cost
-
+## а не торчала прямоугольником.
 func _update_zasypka() -> void:
 	if material_count <= 0:
 		_zasypka.polygon = PackedVector2Array()
@@ -378,7 +389,8 @@ func _update_zasypka() -> void:
 
 ## Глубина верхней кромки засыпки в координатах Бездны.
 func _zasypka_top_y() -> float:
-	var bottom_y: float = _shaft_sides()[0][_bezdna.polygon.size() / 2 - 1].y
+	var left: PackedVector2Array = _shaft_sides()[0]
+	var bottom_y: float = left[left.size() - 1].y
 	var filled := clampf(float(material_count) / float(_abyss_stats.capacity), 0.0, 1.0)
 	return bottom_y - bottom_y * filled
 
@@ -406,11 +418,6 @@ func _interp_x(profile: PackedVector2Array, y: float) -> float:
 			var b := profile[i]
 			return lerpf(a.x, b.x, (y - a.y) / (b.y - a.y))
 	return profile[profile.size() - 1].x
-
-func _jump(node: Polygon2D, base_y: float) -> void:
-	var tween := create_tween()
-	tween.tween_property(node, "position:y", base_y - 8.0, 0.1).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	tween.tween_property(node, "position:y", base_y, 0.15).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
 
 func _pulse_bezdna() -> void:
 	var tween := create_tween()

@@ -1,6 +1,7 @@
-[gd_scene load_steps=3 format=3 uid="uid://c8n2xk4tq7wvj"]
+[gd_scene load_steps=4 format=3 uid="uid://c8n2xk4tq7wvj"]
 
 [ext_resource type="Script" uid="uid://dym3otphdl3u7" path="res://game/scenes/Main.gd" id="1_main"]
+[ext_resource type="Script" path="res://game/scenes/Carrier.gd" id="2_carrier"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_monolit"]
 size = Vector2(180, 180)
@@ -35,26 +36,15 @@ polygon = PackedVector2Array(-65, -90, 65, -90, 75, -25, 90, 90, -90, 90, -75, -
 shape = SubResource("RectangleShape2D_monolit")
 
 [node name="Gruhr" type="Polygon2D" parent="."]
-position = Vector2(360, 272)
+position = Vector2(420, 272)
 color = Color(0.65, 0.85, 0.55, 1)
 polygon = PackedVector2Array(8.000, 0.000, 6.928, 4.000, 4.000, 6.928, 0.000, 8.000, -4.000, 6.928, -6.928, 4.000, -8.000, 0.000, -6.928, -4.000, -4.000, -6.928, 0.000, -8.000, 4.000, -6.928, 6.928, -4.000)
+script = ExtResource("2_carrier")
 
 [node name="GruhrPassive" type="Polygon2D" parent="."]
-position = Vector2(145, 272)
+position = Vector2(310, 272)
 color = Color(0.5, 0.75, 0.75, 1)
 polygon = PackedVector2Array(8.000, 0.000, 6.928, 4.000, 4.000, 6.928, 0.000, 8.000, -4.000, 6.928, -6.928, 4.000, -8.000, 0.000, -6.928, -4.000, -4.000, -6.928, 0.000, -8.000, 4.000, -6.928, 6.928, -4.000)
-
-[node name="Kyrka" type="Node2D" parent="GruhrPassive"]
-position = Vector2(7, -2)
-rotation = -0.5
-
-[node name="Drevko" type="Polygon2D" parent="GruhrPassive/Kyrka"]
-color = Color(0.55, 0.4, 0.25, 1)
-polygon = PackedVector2Array(-1.5, 6, 1.5, 6, 1.5, -26, -1.5, -26)
-
-[node name="Lezvie" type="Polygon2D" parent="GruhrPassive/Kyrka"]
-color = Color(0.8, 0.8, 0.85, 1)
-polygon = PackedVector2Array(-7, -26, 7, -26, 3, -20, -4, -20)
 
 [node name="MaterialLabel" type="Label" parent="./UI"]
 offset_left = 20.0

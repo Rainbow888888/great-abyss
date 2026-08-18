@@ -30,3 +30,7 @@ Thumbs.db
 # Local tooling and build output (not for the public repo)
 /tools/
 /build/
+
+# Рабочий мусор: резервные копии редактора и выгрузки архивов
+*.bak
+*.zip

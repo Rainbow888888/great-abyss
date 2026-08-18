@@ -7,6 +7,7 @@ var age := 0.0
 var target_x := 0.0
 
 func _ready() -> void:
+	add_to_group("shards")
 	input_event.connect(_on_input_event)
 
 func _process(delta: float) -> void:

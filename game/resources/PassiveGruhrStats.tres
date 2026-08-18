@@ -4,5 +4,5 @@
 
 [resource]
 script = ExtResource("1_stats")
-interval = 3.0
+interval = 5.0
 material_amount = 1

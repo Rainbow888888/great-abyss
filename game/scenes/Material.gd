@@ -6,6 +6,9 @@ extends Area2D
 var age := 0.0
 var target_x := 0.0
 
+## Колонка кучи, в которой лежит осколок. -1 — не в куче (несут или крадут).
+var column := -1
+
 func _ready() -> void:
 	add_to_group("shards")
 	input_event.connect(_on_input_event)

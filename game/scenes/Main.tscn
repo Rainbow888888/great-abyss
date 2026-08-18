@@ -70,6 +70,9 @@ wait_time = 3.0
 [node name="AutosaveTimer" type="Timer" parent="."]
 wait_time = 10.0
 
+[node name="ReclaimTimer" type="Timer" parent="."]
+wait_time = 1.0
+
 [node name="NewGameButton" type="Button" parent="./UI"]
 offset_left = 950.0
 offset_top = 20.0
@@ -97,3 +100,17 @@ offset_top = 92.0
 offset_right = 1080.0
 offset_bottom = 120.0
 text = "Debug x10"
+
+[node name="DebugCarrierButton" type="Button" parent="./UI"]
+offset_left = 950.0
+offset_top = 176.0
+offset_right = 1140.0
+offset_bottom = 204.0
+text = "Носильщик (debug)"
+
+[node name="DebugSpeedButton" type="Button" parent="./UI"]
+offset_left = 950.0
+offset_top = 212.0
+offset_right = 1140.0
+offset_bottom = 240.0
+text = "Обучить бегу (debug)"

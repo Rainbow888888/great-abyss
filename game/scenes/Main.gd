@@ -32,10 +32,25 @@ const THROW_X := 590.0
 const SHARD_ORIGIN := Vector2(335.0, 230.0)
 
 ## Куча осколков: ложится справа от добытчика, между ним и Бездной.
-const PILE_CENTER_X := 380.0
-const PILE_SPREAD := 120.0
+## Куча разбита на колонки. Осколок падает в свою колонку, но если она
+## сильно выше соседней — скатывается вбок. Из этого сама собой
+## получается горка с постоянным углом откоса, а не столбики.
+const PILE_LEFT_X := 340.0
+const PILE_COLUMNS := 44
+const COLUMN_W := 5.0
 const MATERIAL_H := 4.8
-const PILE_RADIUS := 10.0
+
+## Насколько колонка может быть выше соседней, прежде чем осколок с неё
+## скатится. Это и есть угол откоса горки.
+const SLOPE_LIMIT := 2
+
+## Предел высоты колонки. Выше куча не растёт — осыпается вбок.
+## 40 × 4.8 px ≈ 192 px, чуть выше Монолита: горка может его перерасти.
+const MAX_COLUMN := 40
+
+## Осколки падают у подножия Монолита, а не по всей ширине — иначе
+## получается ровное плато. Горка нарастает отсюда и оползает вправо.
+const DROP_BAND := 5
 
 const SAVE_PATH := "user://save.json"
 
@@ -66,6 +81,7 @@ var carry_speed := 0.0
 @onready var _zasypka: Polygon2D = $Bezdna/Zasypka
 @onready var _passive_timer: Timer = $PassiveTimer
 @onready var _autosave_timer: Timer = $AutosaveTimer
+@onready var _reclaim_timer: Timer = $ReclaimTimer
 
 var _passive_stats := preload("res://game/resources/PassiveGruhrStats.tres")
 var _abyss_stats := preload("res://game/resources/AbyssStats.tres")
@@ -73,10 +89,11 @@ var _gruhr_stats := preload("res://game/resources/GruhrStats.tres")
 var _upgrade_stats := preload("res://game/resources/UpgradeStats.tres")
 var _chronicle_entries: Resource = preload("res://game/resources/ChronicleEntries.tres")
 
-## Осколки, лежащие на поверхности и никем не занятые. Как только
-## носильщик выбрал осколок, тот уходит из этого списка — иначе двое
-## побегут за одним.
-var _dropped_materials: Array[Area2D] = []
+## Куча: массив колонок, в каждой — стопка осколков снизу вверх.
+## Носильщик всегда снимает верхний осколок колонки, поэтому дыр
+## внутри горки не образуется. Как только осколок выбран — он уходит
+## из кучи, иначе за ним побегут двое.
+var _columns: Array = []
 
 ## Тип — Node2D, а не Carrier: глобальное имя класса регистрирует
 ## редактор, и при запуске сцены скриптом его может не быть.
@@ -85,6 +102,9 @@ var _carry_level := 0
 var _is_debug_mode := false
 
 func _ready() -> void:
+	_columns.resize(PILE_COLUMNS)
+	for i in PILE_COLUMNS:
+		_columns[i] = []
 	_monolit.input_event.connect(_on_monolit_input_event)
 	_passive_timer.timeout.connect(_on_passive_timer_timeout)
 	_autosave_timer.timeout.connect(_on_autosave_timer_timeout)
@@ -92,6 +112,11 @@ func _ready() -> void:
 	$UI/UpgradeButton.pressed.connect(_on_upgrade_button_pressed)
 	$UI/DebugButton.pressed.connect(_on_debug_button_pressed)
 	$UI/CreateCarrierButton.pressed.connect(_on_create_carrier_button_pressed)
+	$UI/DebugCarrierButton.pressed.connect(_on_debug_carrier_button_pressed)
+	$UI/DebugSpeedButton.pressed.connect(_on_debug_speed_button_pressed)
+	_reclaim_timer.timeout.connect(_on_reclaim_timer_timeout)
+	_reclaim_timer.wait_time = _abyss_stats.reclaim_interval
+	_reclaim_timer.start()
 
 	var first_carrier: Node2D = $Gruhr
 	first_carrier.setup(self, THROW_X)
@@ -209,26 +234,74 @@ func _start_prayer_idle() -> void:
 func _drop_material(from: Vector2, animate: bool = true) -> void:
 	var item: Area2D = MATERIAL_SCENE.instantiate()
 	item.position = from
-	var target_x := PILE_CENTER_X + randf_range(-30.0, PILE_SPREAD)
-	item.target_x = target_x
-	var target_y := GROUND_Y - _pile_height_at(target_x)
 	add_child(item)
-	_dropped_materials.append(item)
+	var spot := _settle(item, randi_range(0, DROP_BAND))
 	if not animate:
-		item.position = Vector2(target_x, target_y)
+		item.position = spot
 		return
 	var x_tween := create_tween()
-	x_tween.tween_property(item, "position:x", target_x, 0.45).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	x_tween.tween_property(item, "position:x", spot.x, 0.45).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	var y_tween := create_tween()
-	y_tween.tween_property(item, "position:y", minf(from.y, target_y) - 20.0, 0.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	y_tween.tween_property(item, "position:y", target_y, 0.25).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	y_tween.tween_property(item, "position:y", minf(from.y, spot.y) - 20.0, 0.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	y_tween.tween_property(item, "position:y", spot.y, 0.25).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
 
-func _pile_height_at(x: float) -> float:
-	var count := 0
-	for m in _dropped_materials:
-		if absf(m.target_x - x) <= PILE_RADIUS:
-			count += 1
-	return count * MATERIAL_H
+## Кладёт осколок в кучу, скатывая его вбок, пока откос слишком крут
+## или колонка упёрлась в предел. Возвращает точку, где он лёг.
+func _settle(item: Area2D, wanted: int) -> Vector2:
+	var c := _roll_down(wanted)
+	_columns[c].append(item)
+	item.column = c
+	return _slot_position(c, _columns[c].size() - 1)
+
+## Ищет, куда осколок скатится: вниз по склону, пока перепад с соседом
+## не станет допустимым. Ограничитель шагов — на случай, если куча
+## забита целиком и катиться некуда.
+func _roll_down(start: int) -> int:
+	var c := clampi(start, 0, PILE_COLUMNS - 1)
+	for _step in PILE_COLUMNS * 2:
+		var h: int = _columns[c].size()
+		# За краями кучи — стенки: скатиться туда нельзя.
+		var left: int = _columns[c - 1].size() if c > 0 else h + SLOPE_LIMIT
+		var right: int = _columns[c + 1].size() if c < PILE_COLUMNS - 1 else h + SLOPE_LIMIT
+		if h >= MAX_COLUMN:
+			# Колонка упёрлась в предел. Осыпаемся вбок даже по ровному —
+			# иначе на плоской вершине скатываться некуда и она растёт
+			# выше предела. При равенстве уходим в сторону Бездны.
+			if c < PILE_COLUMNS - 1 and right <= left:
+				c += 1
+			elif c > 0:
+				c -= 1
+			else:
+				return c
+			continue
+		if h - left >= SLOPE_LIMIT and left <= right:
+			c -= 1
+		elif h - right >= SLOPE_LIMIT:
+			c += 1
+		else:
+			return c
+	return c
+
+## Небольшой разброс внутри ячейки: без него осколки выстраиваются
+## в идеальные столбики и куча читается как штрихкод, а не как насыпь.
+func _slot_position(column: int, index: int) -> Vector2:
+	return Vector2(
+		PILE_LEFT_X + column * COLUMN_W + randf_range(-1.6, 1.6),
+		GROUND_Y - index * MATERIAL_H + randf_range(-0.8, 0.8)
+	)
+
+func _pile_size() -> int:
+	var total := 0
+	for col in _columns:
+		total += col.size()
+	return total
+
+## Самая высокая колонка — по ней считается давление всасывания.
+func _tallest_column() -> int:
+	var best := 0
+	for col in _columns:
+		best = maxi(best, col.size())
+	return best
 
 ## Визуальный отклик Монолита на удар молитвы.
 func _squish_monolit() -> void:
@@ -245,22 +318,27 @@ func _squish_monolit() -> void:
 
 ## Выдаёт носильщику ближайший свободный осколок и сразу убирает его из
 ## общей кучи, чтобы за одним осколком не побежали двое.
+## Снимает верхний осколок ближайшей непустой колонки: горка обгрызается
+## сверху, дыр внутри неё не появляется.
 func claim_nearest_material(from_x: float) -> Area2D:
-	var best: Area2D = null
+	var best := -1
 	var best_d := INF
-	for m in _dropped_materials:
-		var d := absf(m.position.x - from_x)
+	for c in PILE_COLUMNS:
+		if _columns[c].is_empty():
+			continue
+		var d := absf(PILE_LEFT_X + c * COLUMN_W - from_x)
 		if d < best_d:
 			best_d = d
-			best = m
-	if best != null:
-		_dropped_materials.erase(best)
-	return best
+			best = c
+	if best < 0:
+		return null
+	return _columns[best].pop_back()
 
 ## Носильщик отказался от осколка (например, исчез сам) — вернуть в кучу.
 func release_material(item: Area2D) -> void:
-	if is_instance_valid(item) and not _dropped_materials.has(item):
-		_dropped_materials.append(item)
+	if not is_instance_valid(item):
+		return
+	item.position = _settle(item, item.column)
 
 ## Носильщик донёс осколок до зева и отпустил его.
 func deliver_material(item: Area2D) -> void:
@@ -280,7 +358,8 @@ func deliver_material(item: Area2D) -> void:
 
 func _spawn_carrier() -> void:
 	var carrier: Node2D = CARRIER_SCENE.instantiate()
-	carrier.position = Vector2(PILE_CENTER_X + randf_range(-40.0, 60.0), SURFACE_Y - 8.0)
+	var pile_mid := PILE_LEFT_X + PILE_COLUMNS * COLUMN_W * 0.5
+	carrier.position = Vector2(pile_mid + randf_range(-40.0, 60.0), SURFACE_Y - 8.0)
 	add_child(carrier)
 	carrier.setup(self, THROW_X)
 	_carriers.append(carrier)
@@ -326,6 +405,18 @@ func _update_upgrade_button() -> void:
 	_upgrade_button.text = "Обучить бегу [%d]" % _upgrade_stats.cost_per_level
 	_upgrade_button.disabled = material_count < _upgrade_stats.cost_per_level
 
+## Отладочные кнопки: то же, что платные, но бесплатно — чтобы щупать
+## поздние стадии сразу, не накапливая материал.
+func _on_debug_carrier_button_pressed() -> void:
+	_spawn_carrier()
+
+func _on_debug_speed_button_pressed() -> void:
+	if _carry_level >= _upgrade_stats.max_level:
+		return
+	_carry_level += 1
+	_apply_carry_speed()
+	_update_buttons()
+
 ## Отладка влияет только на силу клика и ничего не меняет в экономике —
 ## иначе выключение режима не возвращало бы игру в исходное состояние.
 func _on_debug_button_pressed() -> void:
@@ -339,6 +430,46 @@ func _on_new_game_button_pressed() -> void:
 
 func _on_autosave_timer_timeout() -> void:
 	save_game()
+
+# --- Всасывание (T0013) -------------------------------------------------
+
+## Бездна не ждёт подношений вечно. Пока горка ниже порога, она терпит;
+## как только куча перерастает его — начинает утаскивать осколки сама,
+## и они пропадают бесследно. Засчитывается только то, что Грухр принёс:
+## взятое Бездной силой не идёт в засыпку (`docs/02_World/Abyss.md`).
+func _on_reclaim_timer_timeout() -> void:
+	var excess := _tallest_column() - _abyss_stats.reclaim_threshold
+	if excess <= 0:
+		return
+	var count := int(ceilf(excess * _abyss_stats.reclaim_per_excess))
+	for i in count:
+		var item := _steal_top_shard()
+		if item == null:
+			return
+		_suck_into_abyss(item)
+
+## Крадёт с вершины самой высокой колонки — Бездна тянет то, что ближе
+## всего к небу, и горка оседает сверху.
+func _steal_top_shard() -> Area2D:
+	var tallest := -1
+	var tallest_h := 0
+	for c in PILE_COLUMNS:
+		var h: int = _columns[c].size()
+		if h > tallest_h:
+			tallest_h = h
+			tallest = c
+	if tallest < 0:
+		return null
+	return _columns[tallest].pop_back()
+
+func _suck_into_abyss(item: Area2D) -> void:
+	item.column = -1
+	var target := Vector2(_bezdna.position.x, _bezdna.position.y + 60.0)
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(item, "position", target, 0.7).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+	tween.tween_property(item, "scale", Vector2.ZERO, 0.7)
+	tween.finished.connect(item.queue_free)
 
 # --- Летописец ----------------------------------------------------------
 

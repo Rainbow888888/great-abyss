@@ -91,6 +91,7 @@ var carry_capacity := 1
 @onready var _autosave_timer: Timer = $AutosaveTimer
 @onready var _reclaim_timer: Timer = $ReclaimTimer
 @onready var _pylesos: Polygon2D = $Pylesos
+@onready var _nozzle: Node2D = $Pylesos/Nozzle
 
 var _passive_stats := preload("res://game/resources/PassiveGruhrStats.tres")
 var _abyss_stats := preload("res://game/resources/AbyssStats.tres")
@@ -615,6 +616,12 @@ func _on_reclaim_timer_timeout() -> void:
 		_hide_pylesos()
 		return
 	_show_pylesos()
+	# Держим его на уровне засыпки: она растёт — он всплывает вместе с ней.
+	var perch := _pylesos_perch()
+	if _pylesos.position.distance_to(perch) > 2.0:
+		var move := create_tween()
+		move.tween_property(_pylesos, "position", perch, 0.8).set_trans(Tween.TRANS_SINE)
+	_aim_and_blast()
 	var count := int(ceilf(excess * _abyss_stats.reclaim_per_excess))
 	for i in count:
 		var item := _steal_nearest_shard()
@@ -646,11 +653,16 @@ func _suck_into_pylesos(item: Area2D) -> void:
 ## осколки пылесосом. Это снимает противоречие: осколки не «падают в
 ## Бездну сами собой» — их уносит враг, поэтому в засыпку они и не идут
 ## (`docs/02_World/DarkCivilization.md`).
-## Он сидит у нижне-правой стенки Бездны — там, куда игроку физически
-## не дотянуться. Достать его можно будет только улучшениями
-## (`docs/02_World/DarkCivilization.md`).
-const PYLESOS_PERCH_Y := 560.0
-const PYLESOS_HIDDEN_Y := 640.0
+const PYLESOS_HIDDEN_Y := 660.0
+
+## Тёмный цепляется за правую стенку Бездны на уровне засыпки. Пока
+## Бездна пуста, он в самом низу — не достать. Чем выше поднимается
+## засыпка, тем выше всплывает и он: игрок сам подтягивает его к себе.
+## Что с этим делать дальше — `docs/02_World/DarkCivilization.md`.
+func _pylesos_perch() -> Vector2:
+	var right: PackedVector2Array = _shaft_sides()[1]
+	var depth := _zasypka_top_y()
+	return _bezdna.position + Vector2(_interp_x(right, depth) - 16.0, depth - 10.0)
 
 func _show_pylesos() -> void:
 	if _pylesos_active:
@@ -658,7 +670,7 @@ func _show_pylesos() -> void:
 	_pylesos_active = true
 	_pylesos.visible = true
 	var tween := create_tween()
-	tween.tween_property(_pylesos, "position:y", PYLESOS_PERCH_Y, 0.6).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_property(_pylesos, "position", _pylesos_perch(), 0.6).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 func _hide_pylesos() -> void:
 	if not _pylesos_active:
@@ -667,6 +679,30 @@ func _hide_pylesos() -> void:
 	var tween := create_tween()
 	tween.tween_property(_pylesos, "position:y", PYLESOS_HIDDEN_Y, 0.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
 	tween.tween_callback(func() -> void: _pylesos.visible = false)
+
+## Струя показывает, куда он нацелен: без неё воровство выглядит как
+## случайное исчезновение осколков, а не как чужое действие.
+func _aim_and_blast() -> void:
+	var target := Vector2(PILE_LEFT_X + PILE_COLUMNS * COLUMN_W * 0.4, GROUND_Y - 20.0)
+	var to_pile := target - _pylesos.position
+	_nozzle.rotation = to_pile.angle()
+	# Струя тянется до самой кучи. Фиксированной длины мало: тёмный
+	# всплывает и расстояние меняется, а обрубок в воздухе не читается
+	# как «он целится туда».
+	var reach := to_pile.length()
+	var struya: Polygon2D = _nozzle.get_node("Struya")
+	var pts := PackedVector2Array()
+	pts.push_back(Vector2(14.0, -3.0))
+	pts.push_back(Vector2(reach, -reach * 0.075))
+	pts.push_back(Vector2(reach, reach * 0.075))
+	pts.push_back(Vector2(14.0, 3.0))
+	struya.polygon = pts
+	# Держим прозрачной: струя идёт сквозь массив земли, и плотный луч
+	# читался бы как дыра в породе. Прокладка струи по шахте и над
+	# кромкой — в отложенных деталях (`Tickets.md`).
+	var tween := create_tween()
+	tween.tween_property(struya, "modulate:a", 0.34, 0.12)
+	tween.tween_property(struya, "modulate:a", 0.11, 0.5)
 
 # --- Летописец ----------------------------------------------------------
 

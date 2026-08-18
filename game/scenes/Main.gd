@@ -50,6 +50,7 @@ var material_count := 0
 
 var _gruhr_passive_base_y: float
 var _passive_stats := preload("res://game/resources/PassiveGruhrStats.tres")
+var _is_debug_mode := false
 var _abyss_stats := preload("res://game/resources/AbyssStats.tres")
 var _gruhr_stats := preload("res://game/resources/GruhrStats.tres")
 var _upgrade_stats := preload("res://game/resources/UpgradeStats.tres")
@@ -145,10 +146,13 @@ func load_game() -> void:
 
 func _on_monolit_input_event(_viewport: Node, event: InputEvent, _shape_idx: int) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		_drop_material(Vector2(335.0, 230.0))
 		_squish_monolit()
-		_passive_stats.material_amount = min(_passive_stats.material_amount * 10, 100)
-		print("Passive x10 -> %d" % _passive_stats.material_amount)
+		if _is_debug_mode:
+			for i in range(_passive_stats.material_amount):
+				_drop_material(Vector2(335.0, 230.0))
+		else:
+			_drop_material(Vector2(335.0, 230.0))
+		print("Debug mode: %s" % _is_debug_mode)
 
 func _on_passive_timer_timeout() -> void:
 	for i in _passive_stats.material_amount:
@@ -179,9 +183,10 @@ func _on_upgrade_button_pressed() -> void:
 	print("UPGRADE lv=%d speed=%.1f" % [_carry_level, _gruhr_stats.carry_speed])
 
 func _on_debug_button_pressed() -> void:
+	_is_debug_mode = not _is_debug_mode
 	_passive_stats.material_amount = min(_passive_stats.material_amount * 10, 100)
 	_passive_timer.wait_time = _passive_stats.interval
-	print("DEBUG: passive x10 -> %d" % _passive_stats.material_amount)
+	print("DEBUG mode: %s -> passive x10 -> %d" % [_is_debug_mode, _passive_stats.material_amount])
 
 ## Роняет осколок из точки добычи (у Монолита) на землю.
 ## Хаотичная горка: каждый осколок летит в случайную точку

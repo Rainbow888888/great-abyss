@@ -36,21 +36,24 @@ const SHARD_ORIGIN := Vector2(335.0, 230.0)
 ## сильно выше соседней — скатывается вбок. Из этого сама собой
 ## получается горка с постоянным углом откоса, а не столбики.
 const PILE_LEFT_X := 340.0
-const PILE_COLUMNS := 44
-const COLUMN_W := 5.0
-const MATERIAL_H := 4.8
+const PILE_COLUMNS := 84
+const COLUMN_W := 2.6
+const MATERIAL_H := 2.4
+
+## На сколько колонок клик отбрасывает осколок в сторону Бездны.
+const PUSH_COLUMNS := 14
 
 ## Насколько колонка может быть выше соседней, прежде чем осколок с неё
 ## скатится. Это и есть угол откоса горки.
 const SLOPE_LIMIT := 2
 
 ## Предел высоты колонки. Выше куча не растёт — осыпается вбок.
-## 40 × 4.8 px ≈ 192 px, чуть выше Монолита: горка может его перерасти.
-const MAX_COLUMN := 40
+## 80 × 2.4 px ≈ 192 px, чуть выше Монолита: горка может его перерасти.
+const MAX_COLUMN := 80
 
 ## Осколки падают у подножия Монолита, а не по всей ширине — иначе
 ## получается ровное плато. Горка нарастает отсюда и оползает вправо.
-const DROP_BAND := 5
+const DROP_BAND := 10
 
 const SAVE_PATH := "user://save.json"
 
@@ -82,6 +85,7 @@ var carry_speed := 0.0
 @onready var _passive_timer: Timer = $PassiveTimer
 @onready var _autosave_timer: Timer = $AutosaveTimer
 @onready var _reclaim_timer: Timer = $ReclaimTimer
+@onready var _pylesos: Polygon2D = $Pylesos
 
 var _passive_stats := preload("res://game/resources/PassiveGruhrStats.tres")
 var _abyss_stats := preload("res://game/resources/AbyssStats.tres")
@@ -100,6 +104,7 @@ var _columns: Array = []
 var _carriers: Array[Node2D] = []
 var _carry_level := 0
 var _is_debug_mode := false
+var _pylesos_active := false
 
 func _ready() -> void:
 	_columns.resize(PILE_COLUMNS)
@@ -290,6 +295,73 @@ func _slot_position(column: int, index: int) -> Vector2:
 		GROUND_Y - index * MATERIAL_H + randf_range(-0.8, 0.8)
 	)
 
+## Убирает осколок из его колонки. Если он был не сверху — то, что
+## лежало выше, оседает вниз: дыра внутри горки недопустима.
+func _remove_from_column(item: Area2D) -> bool:
+	var c: int = item.column
+	if c < 0 or c >= PILE_COLUMNS:
+		return false
+	var col: Array = _columns[c]
+	var idx := col.find(item)
+	if idx < 0:
+		return false
+	col.remove_at(idx)
+	item.column = -1
+	for i in range(idx, col.size()):
+		var above: Area2D = col[i]
+		var tween := create_tween()
+		tween.tween_property(above, "position", _slot_position(c, i), 0.12).set_trans(Tween.TRANS_SINE)
+	return true
+
+## Осыпание всей кучи до устойчивого профиля. Вызывается после каждого
+## изъятия: раньше откос держался только в момент укладки, поэтому
+## выбитая из середины дыра так и оставалась стоять стеной.
+func _avalanche() -> void:
+	var guard := 0
+	var moved := true
+	while moved and guard < 4000:
+		moved = false
+		for c in PILE_COLUMNS:
+			var h: int = _columns[c].size()
+			if h == 0:
+				continue
+			var left: int = _columns[c - 1].size() if c > 0 else h + SLOPE_LIMIT
+			var right: int = _columns[c + 1].size() if c < PILE_COLUMNS - 1 else h + SLOPE_LIMIT
+			# При равенстве осыпаемся к Бездне — склон должен смотреть туда.
+			if h - right >= SLOPE_LIMIT:
+				_slide(c, c + 1)
+				moved = true
+				guard += 1
+			elif h - left >= SLOPE_LIMIT:
+				_slide(c, c - 1)
+				moved = true
+				guard += 1
+
+## Один осколок съезжает с вершины колонки на соседнюю.
+func _slide(from_c: int, to_c: int) -> void:
+	var item: Area2D = _columns[from_c].pop_back()
+	_columns[to_c].append(item)
+	item.column = to_c
+	var spot := _slot_position(to_c, _columns[to_c].size() - 1)
+	var tween := create_tween()
+	tween.tween_property(item, "position", spot, 0.18).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+
+## Игрок толкает осколок к Бездне: тот выпрыгивает из кучи и падает
+## ближе к зеву, а куча за ним осыпается.
+func on_shard_clicked(item: Area2D) -> void:
+	# Колонку надо запомнить до изъятия: оно сбрасывает её в -1.
+	var from_c: int = item.column
+	if not _remove_from_column(item):
+		return
+	var spot := _settle(item, mini(from_c + PUSH_COLUMNS, PILE_COLUMNS - 1))
+	var from_y := item.position.y
+	var x_tween := create_tween()
+	x_tween.tween_property(item, "position:x", spot.x, 0.32).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	var y_tween := create_tween()
+	y_tween.tween_property(item, "position:y", minf(from_y, spot.y) - 26.0, 0.14).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	y_tween.tween_property(item, "position:y", spot.y, 0.18).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	_avalanche()
+
 func _pile_size() -> int:
 	var total := 0
 	for col in _columns:
@@ -332,7 +404,10 @@ func claim_nearest_material(from_x: float) -> Area2D:
 			best = c
 	if best < 0:
 		return null
-	return _columns[best].pop_back()
+	var item: Area2D = _columns[best].pop_back()
+	item.column = -1
+	_avalanche()
+	return item
 
 ## Носильщик отказался от осколка (например, исчез сам) — вернуть в кучу.
 func release_material(item: Area2D) -> void:
@@ -440,36 +515,55 @@ func _on_autosave_timer_timeout() -> void:
 func _on_reclaim_timer_timeout() -> void:
 	var excess := _tallest_column() - _abyss_stats.reclaim_threshold
 	if excess <= 0:
+		_hide_pylesos()
 		return
+	_show_pylesos()
 	var count := int(ceilf(excess * _abyss_stats.reclaim_per_excess))
 	for i in count:
-		var item := _steal_top_shard()
+		var item := _steal_nearest_shard()
 		if item == null:
-			return
-		_suck_into_abyss(item)
+			break
+		_suck_into_pylesos(item)
+	_avalanche()
 
-## Крадёт с вершины самой высокой колонки — Бездна тянет то, что ближе
-## всего к небу, и горка оседает сверху.
-func _steal_top_shard() -> Area2D:
-	var tallest := -1
-	var tallest_h := 0
-	for c in PILE_COLUMNS:
-		var h: int = _columns[c].size()
-		if h > tallest_h:
-			tallest_h = h
-			tallest = c
-	if tallest < 0:
-		return null
-	return _columns[tallest].pop_back()
+## Крадёт с края кучи, ближнего к Бездне: пылесос дотягивается только
+## до того, что рядом с ним, а не до вершины на другом конце насыпи.
+func _steal_nearest_shard() -> Area2D:
+	for c in range(PILE_COLUMNS - 1, -1, -1):
+		if not _columns[c].is_empty():
+			var item: Area2D = _columns[c].pop_back()
+			item.column = -1
+			return item
+	return null
 
-func _suck_into_abyss(item: Area2D) -> void:
-	item.column = -1
-	var target := Vector2(_bezdna.position.x, _bezdna.position.y + 60.0)
+## Пока простая анимация втягивания. На будущее: осколки должны катиться
+## к пылесосу по земле и подпрыгивать, медленно.
+func _suck_into_pylesos(item: Area2D) -> void:
 	var tween := create_tween()
 	tween.set_parallel(true)
-	tween.tween_property(item, "position", target, 0.7).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
-	tween.tween_property(item, "scale", Vector2.ZERO, 0.7)
+	tween.tween_property(item, "position", _pylesos.position, 0.6).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+	tween.tween_property(item, "scale", Vector2.ZERO, 0.6)
 	tween.finished.connect(item.queue_free)
+
+## Тёмный вылезает из Бездны, когда куча перерастает порог, и вытягивает
+## осколки пылесосом. Это снимает противоречие: осколки не «падают в
+## Бездну сами собой» — их уносит враг, поэтому в засыпку они и не идут
+## (`docs/02_World/DarkCivilization.md`).
+func _show_pylesos() -> void:
+	if _pylesos_active:
+		return
+	_pylesos_active = true
+	_pylesos.visible = true
+	var tween := create_tween()
+	tween.tween_property(_pylesos, "position:y", SURFACE_Y - 14.0, 0.5).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+func _hide_pylesos() -> void:
+	if not _pylesos_active:
+		return
+	_pylesos_active = false
+	var tween := create_tween()
+	tween.tween_property(_pylesos, "position:y", SURFACE_Y + 50.0, 0.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	tween.tween_callback(func() -> void: _pylesos.visible = false)
 
 # --- Летописец ----------------------------------------------------------
 

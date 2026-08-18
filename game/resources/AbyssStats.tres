@@ -8,3 +8,5 @@ capacity = 150
 reclaim_threshold = 20
 reclaim_per_excess = 0.5
 reclaim_interval = 1.0
+stage_threshold = 40
+house_block_value = 5

@@ -126,6 +126,23 @@ offset_right = 1080.0
 offset_bottom = 120.0
 text = "Debug x10"
 
+[node name="Dom" type="Polygon2D" parent="."]
+visible = false
+position = Vector2(88, 280)
+color = Color(0.72, 0.62, 0.44, 1)
+polygon = PackedVector2Array(-42, 0, -42, -46, 0, -72, 42, -46, 42, 0)
+
+[node name="Dver" type="Polygon2D" parent="Dom"]
+color = Color(0.4, 0.31, 0.22, 1)
+polygon = PackedVector2Array(-9, 0, -9, -26, 9, -26, 9, 0)
+
+[node name="HouseButton" type="Button" parent="./UI"]
+offset_left = 950.0
+offset_top = 380.0
+offset_right = 1140.0
+offset_bottom = 408.0
+text = "Построить дом [25]"
+
 [node name="CapacityButton" type="Button" parent="./UI"]
 offset_left = 950.0
 offset_top = 176.0

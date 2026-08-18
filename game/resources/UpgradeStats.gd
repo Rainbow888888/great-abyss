@@ -35,3 +35,8 @@ class_name UpgradeStats
 ## Сколько осколков носильщик берёт за ходку сверх одного.
 @export var capacity_bonus: int = 1
 @export var max_capacity_level: int = 4
+
+## Жертвенный Дом: сколько осколков стоит постройка и сколько блоков
+## из него потом выйдет при разборе.
+@export var house_cost: int = 25
+@export var house_blocks: int = 10

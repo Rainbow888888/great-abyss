@@ -59,7 +59,7 @@ const SAVE_PATH := "user://save.json"
 
 ## Меняется, когда меняется состав сохраняемых данных. Сейв чужой
 ## версии отбрасывается — начинается новая игра.
-const SAVE_VERSION := 3
+const SAVE_VERSION := 4
 
 ## Интервал автосейва. Технический параметр (частота записи), а не
 ## баланс игры, поэтому константа в коде, а не в `.tres`.
@@ -91,6 +91,8 @@ var carry_capacity := 1
 @onready var _autosave_timer: Timer = $AutosaveTimer
 @onready var _reclaim_timer: Timer = $ReclaimTimer
 @onready var _pylesos: Polygon2D = $Pylesos
+@onready var _dom: Polygon2D = $Dom
+@onready var _house_button: Button = $UI/HouseButton
 @onready var _nozzle: Node2D = $Pylesos/Nozzle
 
 var _passive_stats := preload("res://game/resources/PassiveGruhrStats.tres")
@@ -110,6 +112,7 @@ var _columns: Array = []
 var _carriers: Array[Node2D] = []
 var _carry_level := 0
 var _capacity_level := 0
+var _house_blocks := 0
 var _is_debug_mode := false
 var _pylesos_active := false
 
@@ -132,6 +135,7 @@ func _ready() -> void:
 	$UI/DebugSpeedButton.pressed.connect(_on_debug_speed_button_pressed)
 	$UI/CapacityButton.pressed.connect(_on_capacity_button_pressed)
 	$UI/DebugCapacityButton.pressed.connect(_on_debug_capacity_button_pressed)
+	$UI/HouseButton.pressed.connect(_on_house_button_pressed)
 	_reclaim_timer.timeout.connect(_on_reclaim_timer_timeout)
 	_reclaim_timer.wait_time = _abyss_stats.reclaim_interval
 	_reclaim_timer.start()
@@ -168,6 +172,7 @@ func save_game() -> void:
 		"lying_materials": get_tree().get_nodes_in_group("shards").size(),
 		"carry_level": _carry_level,
 		"capacity_level": _capacity_level,
+		"house_blocks": _house_blocks,
 		"carriers": _carriers.size(),
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
@@ -206,6 +211,9 @@ func load_game() -> void:
 	# debug-кнопкой, тоже должны переживать перезапуск.
 	_carry_level = clampi(int(data.get("carry_level", 0)), 0, DEBUG_MAX_LEVEL)
 	_capacity_level = clampi(int(data.get("capacity_level", 0)), 0, DEBUG_MAX_LEVEL)
+	_house_blocks = maxi(int(data.get("house_blocks", 0)), 0)
+	if _house_blocks > 0:
+		_dom.visible = true
 	for i in int(data.get("lying_materials", 0)):
 		_drop_material(SHARD_ORIGIN, false)
 	for i in maxi(int(data.get("carriers", 1)) - 1, 0):
@@ -220,9 +228,50 @@ func _on_monolit_input_event(_viewport: Node, event: InputEvent, _shape_idx: int
 		for i in count:
 			_drop_material(SHARD_ORIGIN)
 
-## Добытчик молится: искра летит от него к Монолиту, и только по её
-## прилёту откалывается осколок. Цепочка «кто → куда → что» должна быть
-## видна, иначе материал берётся из пустоты.
+# --- Пробуждение Бездны и Жертвенный Дом (T0021, T0020) -----------------
+
+## Бездна просыпается, когда её засыпали достаточно. После этого мелкие
+## осколки Монолита её не двигают — нужен источник крупнее. Это и есть
+## ворота к следующей ступени лестницы (`docs/03_Gameplay/FillSources.md`).
+func _is_abyss_awake() -> bool:
+	return material_count >= _abyss_stats.stage_threshold
+
+## Сколько засыпки реально даст этот кусок прямо сейчас.
+func _delivered_value(item: Area2D) -> int:
+	if item.from_monolith and _is_abyss_awake():
+		return 0
+	return item.value
+
+func _on_house_button_pressed() -> void:
+	if _house_blocks > 0:
+		return
+	if not _spend_shards(_upgrade_stats.house_cost):
+		return
+	_house_blocks = _upgrade_stats.house_blocks
+	_dom.visible = true
+	_dom.scale = Vector2(0.2, 0.2)
+	var tween := create_tween()
+	tween.tween_property(_dom, "scale", Vector2(1.0, 1.0), 0.5).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_update_buttons()
+
+## Разбор Дома: добытчик обращает молитву не к камню, а к собственному
+## дому. Каждый отбитый блок весит намного больше осколка и продолжает
+## засыпать Бездну даже после её пробуждения.
+func _dismantle_house() -> void:
+	_house_blocks -= 1
+	_drop_material(_dom.position + Vector2(0, -40.0), true, _abyss_stats.house_block_value, false)
+	var shake := create_tween()
+	shake.tween_property(_dom, "position:x", _dom.position.x - 4.0, 0.06)
+	shake.tween_property(_dom, "position:x", _dom.position.x, 0.12)
+	if _house_blocks <= 0:
+		var gone := create_tween()
+		gone.tween_property(_dom, "scale", Vector2(1.0, 0.0), 0.4).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+		gone.tween_callback(func() -> void: _dom.visible = false)
+	_update_buttons()
+
+## Добытчик молится: искра летит от него к цели, и только по её прилёту
+## откалывается кусок. Цепочка «кто → куда → что» должна быть видна,
+## иначе материал берётся из пустоты.
 func _on_passive_timer_timeout() -> void:
 	var spark := Polygon2D.new()
 	spark.color = Color(0.95, 0.95, 0.78, 1)
@@ -234,12 +283,19 @@ func _on_passive_timer_timeout() -> void:
 	spark.polygon = pts
 	spark.position = _gruhr_passive.position + Vector2(0, -12)
 	add_child(spark)
+	# Пока Дом стоит, молитва обращена к нему, а не к камню: Грухр
+	# разбирает то, что сам построил. Это и есть моральный узел игры.
+	var to_house := _house_blocks > 0
+	var target: Vector2 = _dom.position + Vector2(0, -40.0) if to_house else SHARD_ORIGIN
 	var tween := create_tween()
 	tween.set_parallel(true)
-	tween.tween_property(spark, "position", SHARD_ORIGIN, 0.25).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	tween.tween_property(spark, "position", target, 0.25).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
 	tween.tween_property(spark, "scale", Vector2(0.4, 0.4), 0.25)
 	tween.finished.connect(func() -> void:
 		spark.queue_free()
+		if to_house and _house_blocks > 0:
+			_dismantle_house()
+			return
 		_squish_monolit()
 		for i in _passive_stats.material_amount:
 			_drop_material(SHARD_ORIGIN)
@@ -253,9 +309,17 @@ func _start_prayer_idle() -> void:
 
 ## Осколок летит дугой от Монолита и ложится в кучу. Высота места
 ## посадки зависит от того, сколько осколков уже лежит рядом.
-func _drop_material(from: Vector2, animate: bool = true) -> void:
+func _drop_material(from: Vector2, animate: bool = true, value: int = 1, from_monolith: bool = true) -> void:
 	var item: Area2D = MATERIAL_SCENE.instantiate()
 	item.position = from
+	item.value = value
+	item.from_monolith = from_monolith
+	if not from_monolith:
+		# Блок Дома крупнее осколка и другого цвета: видно, что несут
+		# не камень, а разобранное жильё.
+		item.scale = Vector2(2.6, 2.6)
+		var visual: Polygon2D = item.get_node("Visual")
+		visual.color = Color(0.72, 0.62, 0.44, 1)
 	add_child(item)
 	var spot := _settle(item, randi_range(0, DROP_BAND))
 	if not animate:
@@ -434,7 +498,7 @@ func release_material(item: Area2D) -> void:
 
 ## Носильщик донёс осколок до зева и отпустил его.
 func deliver_material(item: Area2D) -> void:
-	material_count += 1
+	material_count += _delivered_value(item)
 	_material_label.text = "В Бездне: %d" % material_count
 	_update_buttons()
 	_check_chronicle()
@@ -474,7 +538,14 @@ func _update_buttons() -> void:
 		var cap_cost := _capacity_cost()
 		_capacity_button.text = "Носить больше [%d]" % cap_cost
 		_capacity_button.disabled = _pile_size() < cap_cost
-	_shard_label.text = "Осколков в куче: %d (по %d за ходку)" % [_pile_size(), carry_capacity]
+	if _house_blocks > 0:
+		_house_button.text = "Дом разбирают [%d]" % _house_blocks
+		_house_button.disabled = true
+	else:
+		_house_button.text = "Построить дом [%d]" % _upgrade_stats.house_cost
+		_house_button.disabled = _pile_size() < _upgrade_stats.house_cost
+	var awake := " — Бездна проснулась, осколки ей мало" if _is_abyss_awake() else ""
+	_shard_label.text = "Осколков в куче: %d (по %d за ходку)%s" % [_pile_size(), carry_capacity, awake]
 
 ## Куча меняется от многих причин — добычи, переноски, воровства, трат.
 ## Дёргать кнопки на каждое событие было бы россыпью вызовов, поэтому

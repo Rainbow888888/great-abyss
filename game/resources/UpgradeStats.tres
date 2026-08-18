@@ -14,3 +14,5 @@ capacity_cost_base = 12
 capacity_cost_growth = 2.0
 capacity_bonus = 1
 max_capacity_level = 4
+house_cost = 25
+house_blocks = 10

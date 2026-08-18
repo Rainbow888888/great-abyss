@@ -74,6 +74,8 @@ func _ready() -> void:
 	upgrade_btn.pressed.connect(_on_upgrade_button_pressed)
 	var debug_btn: Button = $UI/DebugButton
 	debug_btn.pressed.connect(_on_debug_button_pressed)
+	var create_carrier_btn: Button = $UI/CreateCarrierButton
+	create_carrier_btn.pressed.connect(_on_create_carrier_button_pressed)
 	_gruhr_passive_base_y = _gruhr_passive.position.y
 	_passive_timer.wait_time = _passive_stats.interval
 	_passive_timer.start()
@@ -181,6 +183,16 @@ func _on_upgrade_button_pressed() -> void:
 	_material_label.text = "В Бездне: %d" % material_count
 	_update_upgrade_button()
 	print("UPGRADE lv=%d speed=%.1f" % [_carry_level, _gruhr_stats.carry_speed])
+
+func _on_create_carrier_button_pressed() -> void:
+	var new_carrier: Node2D = Node2D.new()
+	new_carrier.position = Vector2(_gruhr.position.x + 50.0, _gruhr.position.y)
+	add_child(new_carrier)
+	var sprite: Polygon2D = Polygon2D.new()
+	sprite.color = Color(0.65, 0.85, 0.55, 1) # Same as Gruhr
+	sprite.polygon = PackedVector2Array(8.0, 0.0, 6.928, 4.0, 4.0, 6.928, 0.0, 8.0, -4.0, 6.928, -6.928, 4.0, -8.0, 0.0, -6.928, -4.0, -4.0, -6.928, 0.0, -8.0, 4.0, -6.928, 6.928, -4.0)
+	new_carrier.add_child(sprite)
+	print("Created additional carrier at", new_carrier.position)
 
 func _on_debug_button_pressed() -> void:
 	_is_debug_mode = not _is_debug_mode

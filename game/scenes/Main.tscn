@@ -94,6 +94,13 @@ offset_right = 1120.0
 offset_bottom = 84.0
 text = "Обучить бегу [5]"
 
+[node name="CreateCarrierButton" type="Button" parent="./UI"]
+offset_left = 950.0
+offset_top = 140.0
+offset_right = 1120.0
+offset_bottom = 168.0
+text = "Создать носильщика"
+
 [node name="DebugButton" type="Button" parent="./UI"]
 offset_left = 950.0
 offset_top = 92.0

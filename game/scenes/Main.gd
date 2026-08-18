@@ -549,20 +549,26 @@ func _suck_into_pylesos(item: Area2D) -> void:
 ## осколки пылесосом. Это снимает противоречие: осколки не «падают в
 ## Бездну сами собой» — их уносит враг, поэтому в засыпку они и не идут
 ## (`docs/02_World/DarkCivilization.md`).
+## Он сидит у нижне-правой стенки Бездны — там, куда игроку физически
+## не дотянуться. Достать его можно будет только улучшениями
+## (`docs/02_World/DarkCivilization.md`).
+const PYLESOS_PERCH_Y := 560.0
+const PYLESOS_HIDDEN_Y := 640.0
+
 func _show_pylesos() -> void:
 	if _pylesos_active:
 		return
 	_pylesos_active = true
 	_pylesos.visible = true
 	var tween := create_tween()
-	tween.tween_property(_pylesos, "position:y", SURFACE_Y - 14.0, 0.5).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_property(_pylesos, "position:y", PYLESOS_PERCH_Y, 0.6).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 func _hide_pylesos() -> void:
 	if not _pylesos_active:
 		return
 	_pylesos_active = false
 	var tween := create_tween()
-	tween.tween_property(_pylesos, "position:y", SURFACE_Y + 50.0, 0.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	tween.tween_property(_pylesos, "position:y", PYLESOS_HIDDEN_Y, 0.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
 	tween.tween_callback(func() -> void: _pylesos.visible = false)
 
 # --- Летописец ----------------------------------------------------------

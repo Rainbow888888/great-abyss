@@ -43,7 +43,7 @@ script = ExtResource("2_carrier")
 
 [node name="Pylesos" type="Polygon2D" parent="."]
 visible = false
-position = Vector2(600, 330)
+position = Vector2(858, 640)
 color = Color(0.45, 0.11, 0.13, 1)
 polygon = PackedVector2Array(-11, 6, -8, -6, -3, -10, 4, -10, 9, -5, 11, 6)
 

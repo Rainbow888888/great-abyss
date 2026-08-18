@@ -682,27 +682,51 @@ func _hide_pylesos() -> void:
 
 ## Струя показывает, куда он нацелен: без неё воровство выглядит как
 ## случайное исчезновение осколков, а не как чужое действие.
+## Сколько струек воздуха пускать за один тик воровства.
+const AIR_STREAKS := 6
+
+## Направление показывает короткий раструб у сопла, а сам факт воровства —
+## потоки воздуха, летящие от кучи к тёмному. Длинный луч через полэкрана
+## забирал на себя всё внимание и загораживал наблюдение за кучей.
 func _aim_and_blast() -> void:
-	var target := Vector2(PILE_LEFT_X + PILE_COLUMNS * COLUMN_W * 0.4, GROUND_Y - 20.0)
-	var to_pile := target - _pylesos.position
+	var from := Vector2(PILE_LEFT_X + PILE_COLUMNS * COLUMN_W * 0.4, GROUND_Y - 20.0)
+	var to_pile := from - _pylesos.position
 	_nozzle.rotation = to_pile.angle()
-	# Струя тянется до самой кучи. Фиксированной длины мало: тёмный
-	# всплывает и расстояние меняется, а обрубок в воздухе не читается
-	# как «он целится туда».
-	var reach := to_pile.length()
 	var struya: Polygon2D = _nozzle.get_node("Struya")
-	var pts := PackedVector2Array()
-	pts.push_back(Vector2(14.0, -3.0))
-	pts.push_back(Vector2(reach, -reach * 0.075))
-	pts.push_back(Vector2(reach, reach * 0.075))
-	pts.push_back(Vector2(14.0, 3.0))
-	struya.polygon = pts
-	# Держим прозрачной: струя идёт сквозь массив земли, и плотный луч
-	# читался бы как дыра в породе. Прокладка струи по шахте и над
-	# кромкой — в отложенных деталях (`Tickets.md`).
 	var tween := create_tween()
-	tween.tween_property(struya, "modulate:a", 0.34, 0.12)
-	tween.tween_property(struya, "modulate:a", 0.11, 0.5)
+	tween.tween_property(struya, "modulate:a", 0.3, 0.12)
+	tween.tween_property(struya, "modulate:a", 0.12, 0.5)
+	_spawn_air_flow(from, _pylesos.position)
+
+## Тонкие штрихи летят от кучи к тёмному. Они мелкие и живут доли
+## секунды, поэтому показывают направление кражи, ничего не загораживая.
+func _spawn_air_flow(from: Vector2, to: Vector2) -> void:
+	var dir := (to - from).normalized()
+	var perp := Vector2(-dir.y, dir.x)
+	for i in AIR_STREAKS:
+		var streak := Polygon2D.new()
+		streak.color = Color(0.85, 0.45, 0.45, 1)
+		streak.modulate.a = 0.0
+		var pts := PackedVector2Array()
+		pts.push_back(Vector2(-6.0, -0.7))
+		pts.push_back(Vector2(6.0, -0.7))
+		pts.push_back(Vector2(6.0, 0.7))
+		pts.push_back(Vector2(-6.0, 0.7))
+		streak.polygon = pts
+		streak.rotation = dir.angle()
+		var off := perp * randf_range(-14.0, 14.0)
+		streak.position = from + off + dir * randf_range(0.0, 70.0)
+		add_child(streak)
+		var delay := randf_range(0.0, 0.4)
+		var move := create_tween()
+		move.tween_interval(delay)
+		move.tween_property(streak, "position", to + off * 0.25, 0.7).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+		move.tween_callback(streak.queue_free)
+		var fade := create_tween()
+		fade.tween_interval(delay)
+		fade.tween_property(streak, "modulate:a", 0.6, 0.12)
+		fade.tween_interval(0.4)
+		fade.tween_property(streak, "modulate:a", 0.0, 0.18)
 
 # --- Летописец ----------------------------------------------------------
 

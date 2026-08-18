@@ -75,6 +75,7 @@ var material_count := 0
 var carry_speed := 0.0
 
 @onready var _material_label: Label = $UI/MaterialLabel
+@onready var _shard_label: Label = $UI/ShardLabel
 @onready var _chronicle_label: Label = $UI/ChronicleLabel
 @onready var _upgrade_button: Button = $UI/UpgradeButton
 @onready var _carrier_button: Button = $UI/CreateCarrierButton
@@ -105,6 +106,10 @@ var _carriers: Array[Node2D] = []
 var _carry_level := 0
 var _is_debug_mode := false
 var _pylesos_active := false
+
+## Кэш размера кучи: кнопки и счётчик обновляются только когда он
+## меняется, а не каждый кадр.
+var _last_pile_size := -1
 
 func _ready() -> void:
 	_columns.resize(PILE_COLUMNS)
@@ -440,20 +445,26 @@ func _spawn_carrier() -> void:
 	_carriers.append(carrier)
 
 func _on_create_carrier_button_pressed() -> void:
-	var cost := _carrier_cost()
-	if material_count < cost:
+	if not _spend_shards(_carrier_cost()):
 		return
-	material_count -= cost
 	_spawn_carrier()
-	_material_label.text = "В Бездне: %d" % material_count
-	_update_zasypka()
 	_update_buttons()
 
 func _update_buttons() -> void:
 	_update_upgrade_button()
 	var carrier_cost := _carrier_cost()
 	_carrier_button.text = "Новый носильщик [%d]" % carrier_cost
-	_carrier_button.disabled = material_count < carrier_cost
+	_carrier_button.disabled = _pile_size() < carrier_cost
+	_shard_label.text = "Осколков в куче: %d" % _pile_size()
+
+## Куча меняется от многих причин — добычи, переноски, воровства, трат.
+## Дёргать кнопки на каждое событие было бы россыпью вызовов, поэтому
+## следим за размером кучи и обновляем UI, только когда он изменился.
+func _process(_delta: float) -> void:
+	var size := _pile_size()
+	if size != _last_pile_size:
+		_last_pile_size = size
+		_update_buttons()
 
 # --- Апгрейды и кнопки --------------------------------------------------
 
@@ -461,6 +472,40 @@ func _update_buttons() -> void:
 ## иначе она пережила бы «Новую игру» и росла бы бесконечно.
 func _apply_carry_speed() -> void:
 	carry_speed = _gruhr_stats.carry_speed + _carry_level * _upgrade_stats.speed_bonus
+
+## Валюта — осколки в куче, а не брошенное в Бездну. Брошенное отдано
+## насовсем: доставать подношения обратно, чтобы обучить Грухра бегу,
+## бессмысленно. Отсюда главный выбор игры: каждый осколок либо
+## засыпает Бездну, либо идёт в рост.
+func _spend_shards(count: int) -> bool:
+	if _pile_size() < count:
+		return false
+	for i in count:
+		var item := _take_shard_for_work()
+		if item == null:
+			return false
+		_consume_shard(item)
+	_avalanche()
+	return true
+
+## Берём с дальнего от Бездны края: там, где Грухри работают.
+## Носильщик берёт ближайший к себе, тёмный — ближний к Бездне.
+func _take_shard_for_work() -> Area2D:
+	for c in PILE_COLUMNS:
+		if not _columns[c].is_empty():
+			var item: Area2D = _columns[c].pop_back()
+			item.column = -1
+			return item
+	return null
+
+## Осколок уходит в дело: поднимается и тает.
+func _consume_shard(item: Area2D) -> void:
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(item, "position:y", item.position.y - 34.0, 0.45).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tween.tween_property(item, "modulate:a", 0.0, 0.45)
+	tween.tween_property(item, "scale", Vector2(1.8, 1.8), 0.45)
+	tween.finished.connect(item.queue_free)
 
 ## Цена следующего носильщика и следующего уровня скорости. Растут по
 ## экспоненте — плоская цена ломает экономику жанра (`UpgradeStats.gd`).
@@ -474,14 +519,10 @@ func _speed_cost() -> int:
 func _on_upgrade_button_pressed() -> void:
 	if _carry_level >= _upgrade_stats.max_level:
 		return
-	var cost := _speed_cost()
-	if material_count < cost:
+	if not _spend_shards(_speed_cost()):
 		return
-	material_count -= cost
 	_carry_level += 1
 	_apply_carry_speed()
-	_material_label.text = "В Бездне: %d" % material_count
-	_update_zasypka()
 	_update_buttons()
 
 func _update_upgrade_button() -> void:
@@ -491,7 +532,7 @@ func _update_upgrade_button() -> void:
 		return
 	var cost := _speed_cost()
 	_upgrade_button.text = "Обучить бегу [%d]" % cost
-	_upgrade_button.disabled = material_count < cost
+	_upgrade_button.disabled = _pile_size() < cost
 
 ## Отладочные кнопки: то же, что платные, но бесплатно — чтобы щупать
 ## поздние стадии сразу, не накапливая материал.

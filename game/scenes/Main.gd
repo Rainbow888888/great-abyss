@@ -190,7 +190,20 @@ func _on_create_carrier_button_pressed() -> void:
 	add_child(new_carrier)
 	var sprite: Polygon2D = Polygon2D.new()
 	sprite.color = Color(0.65, 0.85, 0.55, 1) # Same as Gruhr
-	sprite.polygon = PackedVector2Array(8.0, 0.0, 6.928, 4.0, 4.0, 6.928, 0.0, 8.0, -4.0, 6.928, -6.928, 4.0, -8.0, 0.0, -6.928, -4.0, -4.0, -6.928, 0.0, -8.0, 4.0, -6.928, 6.928, -4.0)
+	var arr := PackedVector2Array()
+	arr.push_back(Vector2(8.0, 0.0))
+	arr.push_back(Vector2(6.928, 4.0))
+	arr.push_back(Vector2(4.0, 6.928))
+	arr.push_back(Vector2(0.0, 8.0))
+	arr.push_back(Vector2(-4.0, 6.928))
+	arr.push_back(Vector2(-6.928, 4.0))
+	arr.push_back(Vector2(-8.0, 0.0))
+	arr.push_back(Vector2(-6.928, -4.0))
+	arr.push_back(Vector2(-4.0, -6.928))
+	arr.push_back(Vector2(0.0, -8.0))
+	arr.push_back(Vector2(4.0, -6.928))
+	arr.push_back(Vector2(6.928, -4.0))
+	sprite.polygon = arr
 	new_carrier.add_child(sprite)
 	print("Created additional carrier at", new_carrier.position)
 

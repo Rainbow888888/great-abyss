@@ -12,7 +12,9 @@ class_name UpgradeStats
 @export var carrier_cost_base: int = 8
 
 ## Во сколько раз дорожает каждый следующий носильщик.
-@export var carrier_cost_growth: float = 1.5
+## Понижено с 1.5 после счёта T0026: при 1.5 носильщики съедали весь
+## бюджет и на стойкость не оставалось ничего ни при какой стратегии.
+@export var carrier_cost_growth: float = 1.28
 
 ## Первый уровень «Обучить бегу».
 @export var speed_cost_base: int = 5

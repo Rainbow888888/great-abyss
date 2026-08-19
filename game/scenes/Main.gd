@@ -866,7 +866,7 @@ func _arm_wave() -> void:
 	var gained := material_count - _fill_at_last_wave
 	_fill_at_last_wave = material_count
 	var interval: float = _abyss_stats.wave_base_interval / (1.0 + gained * _abyss_stats.wave_greed)
-	_wave_timer.wait_time = maxf(interval, 3.0)
+	_wave_timer.wait_time = maxf(interval, _abyss_stats.wave_floor_interval)
 	_wave_timer.start()
 
 func _on_wave_timer_timeout() -> void:

@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1_up")
 carrier_cost_base = 8
-carrier_cost_growth = 1.5
+carrier_cost_growth = 1.28
 speed_cost_base = 5
 speed_cost_growth = 2.0
 speed_bonus = 15.0

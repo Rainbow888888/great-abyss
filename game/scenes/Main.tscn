@@ -98,11 +98,14 @@ wait_time = 10.0
 [node name="ReclaimTimer" type="Timer" parent="."]
 wait_time = 1.0
 
-[node name="GrowTimer" type="Timer" parent="."]
-wait_time = 3.0
-
 [node name="WaveTimer" type="Timer" parent="."]
 wait_time = 20.0
+
+[node name="Rezonans" type="Line2D" parent="."]
+visible = false
+modulate = Color(1, 1, 1, 0.18)
+width = 2.0
+default_color = Color(0.6, 0.9, 0.85, 1)
 
 [node name="Volna" type="Line2D" parent="."]
 visible = false

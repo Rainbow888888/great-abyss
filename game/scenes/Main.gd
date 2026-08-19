@@ -93,7 +93,7 @@ var carry_capacity := 1
 @onready var _pylesos: Polygon2D = $Pylesos
 @onready var _kristall: Polygon2D = $Kristall
 @onready var _crystal_button: Button = $UI/CrystalButton
-@onready var _grow_timer: Timer = $GrowTimer
+@onready var _rezonans: Line2D = $Rezonans
 @onready var _wave_timer: Timer = $WaveTimer
 @onready var _volna: Line2D = $Volna
 @onready var _nozzle: Node2D = $Pylesos/Nozzle
@@ -146,9 +146,6 @@ func _ready() -> void:
 	$UI/CapacityButton.pressed.connect(_on_capacity_button_pressed)
 	$UI/DebugCapacityButton.pressed.connect(_on_debug_capacity_button_pressed)
 	$UI/CrystalButton.pressed.connect(_on_crystal_button_pressed)
-	_grow_timer.timeout.connect(_on_grow_timer_timeout)
-	_grow_timer.wait_time = _crystal_stats.grow_interval
-	_grow_timer.start()
 	_wave_timer.timeout.connect(_on_wave_timer_timeout)
 	_arm_wave()
 	_reclaim_timer.timeout.connect(_on_reclaim_timer_timeout)
@@ -259,18 +256,34 @@ func _delivered_value(item: Area2D) -> int:
 ## Кристалл растёт сам. Игрок ростом не управляет — в этом и смысл:
 ## переключатель режимов сделал бы решение бухгалтерским, а растущий
 ## сам по себе кристалл делает его искушением («выдержу ли ещё»).
-func _on_grow_timer_timeout() -> void:
+## Кристалл растёт не сам — его растит добытчик. Молитва бьёт в Монолит,
+## и через резонанс между камнем и кристаллом часть силы уходит в рост.
+## Поэтому после пробуждения Грухри не бездельничают: осколки больше не
+## засыпают Бездну, но молитва по-прежнему растит кристалл.
+func _grow_crystal_from_prayer() -> void:
 	if _crystal_mass >= _crystal_stats.max_mass:
 		return
 	_crystal_mass = mini(_crystal_mass + _crystal_stats.grow_amount, _crystal_stats.max_mass)
 	_refresh_crystal()
+	_pulse_rezonans()
 	_update_buttons()
+
+## Нить резонанса между Монолитом и кристаллом. Видна всегда, пока
+## кристалл есть, и вспыхивает на каждой молитве — связь между ними
+## должна читаться, а не подразумеваться.
+func _pulse_rezonans() -> void:
+	_rezonans.visible = true
+	_rezonans.points = PackedVector2Array([_monolit.position, _kristall.position + Vector2(0, -30.0)])
+	var tween := create_tween()
+	tween.tween_property(_rezonans, "modulate:a", 0.75, 0.1)
+	tween.tween_property(_rezonans, "modulate:a", 0.18, 0.6)
 
 ## Размер на экране — прямое отражение массы. Кристалл и есть индикатор
 ## прогресса, пока линия засыпки стоит.
 func _refresh_crystal() -> void:
 	if _crystal_mass <= 0:
 		_kristall.visible = false
+		_rezonans.visible = false
 		return
 	_kristall.visible = true
 	var t := float(_crystal_mass) / float(_crystal_stats.max_mass)
@@ -325,6 +338,7 @@ func _on_passive_timer_timeout() -> void:
 		_squish_monolit()
 		for i in _passive_stats.material_amount:
 			_drop_material(SHARD_ORIGIN, true, _shard_value())
+		_grow_crystal_from_prayer()
 	)
 
 ## Добытчик всё время в молитве — медленное дыхание на месте.
@@ -500,21 +514,29 @@ func _squish_monolit() -> void:
 ## Снимает верхний осколок ближайшей непустой колонки: горка обгрызается
 ## сверху, дыр внутри неё не появляется.
 func claim_nearest_material(from_x: float) -> Area2D:
-	var best := -1
+	var best: Area2D = null
 	var best_d := INF
 	for c in PILE_COLUMNS:
-		if _columns[c].is_empty():
+		var col: Array = _columns[c]
+		if col.is_empty():
 			continue
-		var d := absf(PILE_LEFT_X + c * COLUMN_W - from_x)
-		if d < best_d:
-			best_d = d
-			best = c
-	if best < 0:
+		# Ищем сверху вниз первый годный: если Бездна проснулась, мелкие
+		# осколки Монолита ей не нужны, и таскать их — не просто впустую,
+		# а во вред: они пропадают из кучи, то есть из валюты.
+		for i in range(col.size() - 1, -1, -1):
+			var item: Area2D = col[i]
+			if _delivered_value(item) <= 0:
+				continue
+			var d := absf(PILE_LEFT_X + c * COLUMN_W - from_x)
+			if d < best_d:
+				best_d = d
+				best = item
+			break
+	if best == null:
 		return null
-	var item: Area2D = _columns[best].pop_back()
-	item.column = -1
+	_remove_from_column(best)
 	_avalanche()
-	return item
+	return best
 
 ## Носильщик отказался от осколка (например, исчез сам) — вернуть в кучу.
 func release_material(item: Area2D) -> void:
@@ -835,7 +857,7 @@ func _build_wave_arc(radius: float) -> void:
 		pts.push_back(Vector2(cos(a) * radius, sin(a) * radius * 0.55))
 	_volna.points = pts
 
-## Чем больше скормили с прошлой волны, тем скорее следующая. Бездна
+## Чем больше засыпали с прошлой волны, тем скорее следующая. Бездна
 ## огрызается на жадность, а не по расписанию.
 func _arm_wave() -> void:
 	var gained := material_count - _fill_at_last_wave

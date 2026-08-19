@@ -94,6 +94,8 @@ var carry_capacity := 1
 @onready var _kristall: Polygon2D = $Kristall
 @onready var _crystal_button: Button = $UI/CrystalButton
 @onready var _grow_timer: Timer = $GrowTimer
+@onready var _wave_timer: Timer = $WaveTimer
+@onready var _volna: Line2D = $Volna
 @onready var _nozzle: Node2D = $Pylesos/Nozzle
 
 var _passive_stats := preload("res://game/resources/PassiveGruhrStats.tres")
@@ -116,6 +118,11 @@ var _carry_level := 0
 var _capacity_level := 0
 ## Масса растущего кристалла. Чем больше — тем крупнее осколки.
 var _crystal_mass := 0
+
+## Дыхание Бездны: радиус идущей волны и кого она уже задела.
+var _wave_radius := -1.0
+var _wave_hit: Array = []
+var _fill_at_last_wave := 0
 var _is_debug_mode := false
 var _pylesos_active := false
 
@@ -142,6 +149,8 @@ func _ready() -> void:
 	_grow_timer.timeout.connect(_on_grow_timer_timeout)
 	_grow_timer.wait_time = _crystal_stats.grow_interval
 	_grow_timer.start()
+	_wave_timer.timeout.connect(_on_wave_timer_timeout)
+	_arm_wave()
 	_reclaim_timer.timeout.connect(_on_reclaim_timer_timeout)
 	_reclaim_timer.wait_time = _abyss_stats.reclaim_interval
 	_reclaim_timer.start()
@@ -564,7 +573,8 @@ func _update_buttons() -> void:
 ## Куча меняется от многих причин — добычи, переноски, воровства, трат.
 ## Дёргать кнопки на каждое событие было бы россыпью вызовов, поэтому
 ## следим за размером кучи и обновляем UI, только когда он изменился.
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	_advance_wave(delta)
 	var size := _pile_size()
 	if size != _last_pile_size:
 		_last_pile_size = size
@@ -812,6 +822,53 @@ func _spawn_air_flow(from: Vector2, to: Vector2) -> void:
 		fade.tween_property(streak, "modulate:a", 0.6, 0.12)
 		fade.tween_interval(0.4)
 		fade.tween_property(streak, "modulate:a", 0.0, 0.18)
+
+# --- Дыхание Бездны (T0018 + T0019) -------------------------------------
+
+## Дуга перестраивается по реальному радиусу, а не масштабируется:
+## `Line2D` масштабирует и толщину линии, и волна превращалась в купол.
+## Полукруг вверх — волна идёт по поверхности, не под землёй.
+func _build_wave_arc(radius: float) -> void:
+	var pts := PackedVector2Array()
+	for i in 33:
+		var a := PI + PI * float(i) / 32.0
+		pts.push_back(Vector2(cos(a) * radius, sin(a) * radius * 0.55))
+	_volna.points = pts
+
+## Чем больше скормили с прошлой волны, тем скорее следующая. Бездна
+## огрызается на жадность, а не по расписанию.
+func _arm_wave() -> void:
+	var gained := material_count - _fill_at_last_wave
+	_fill_at_last_wave = material_count
+	var interval: float = _abyss_stats.wave_base_interval / (1.0 + gained * _abyss_stats.wave_greed)
+	_wave_timer.wait_time = maxf(interval, 3.0)
+	_wave_timer.start()
+
+func _on_wave_timer_timeout() -> void:
+	_wave_radius = 0.0
+	_wave_hit.clear()
+	_volna.visible = true
+	_volna.modulate.a = 0.9
+	_arm_wave()
+
+## Волна расходится из зева. Кого накрыло — того сбивает: груз падает
+## обратно в кучу, носильщик стоит оглушённый. Носильщики и есть узкое
+## место, поэтому кара летит именно в них.
+func _advance_wave(delta: float) -> void:
+	if _wave_radius < 0.0:
+		return
+	_wave_radius += _abyss_stats.wave_speed * delta
+	_build_wave_arc(_wave_radius)
+	_volna.modulate.a = maxf(0.0, 0.9 - _wave_radius / 900.0)
+	for c in _carriers:
+		if not is_instance_valid(c) or c in _wave_hit:
+			continue
+		if absf(c.position.x - _volna.position.x) <= _wave_radius:
+			_wave_hit.append(c)
+			c.stun(_abyss_stats.stun_duration)
+	if _wave_radius > 900.0:
+		_wave_radius = -1.0
+		_volna.visible = false
 
 # --- Летописец ----------------------------------------------------------
 

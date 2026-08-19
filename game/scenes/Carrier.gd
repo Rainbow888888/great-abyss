@@ -22,6 +22,29 @@ var _carried: Array[Area2D] = []
 var _main: Node = null
 var _throw_x := 0.0
 
+## Сколько секунд носильщик ещё оглушён волной Бездны.
+var _stun_left := 0.0
+
+## Волна Бездны сбивает носильщика: он роняет груз обратно в кучу и
+## какое-то время не может идти. Кара бьёт по транспорту — по узкому
+## месту игры (`docs/05_References/DesignReferences.md`).
+func stun(duration: float) -> void:
+	_stun_left = maxf(_stun_left, duration)
+	if is_instance_valid(_target):
+		_main.release_material(_target)
+		_target = null
+	for item in _carried:
+		if is_instance_valid(item):
+			_main.release_material(item)
+	_carried.clear()
+	_state = State.IDLE
+	var tween := create_tween()
+	tween.tween_property(self, "modulate", Color(1.4, 0.7, 0.7, 1), 0.1)
+	tween.tween_property(self, "modulate", Color(1, 1, 1, 1), duration)
+
+func is_stunned() -> bool:
+	return _stun_left > 0.0
+
 ## Точку сброса передаём значением, а не читаем константу с чужого
 ## скрипта: так носильщик не зависит от устройства Main.
 func setup(main: Node, throw_x: float) -> void:
@@ -30,6 +53,9 @@ func setup(main: Node, throw_x: float) -> void:
 
 func _process(delta: float) -> void:
 	if _main == null:
+		return
+	if _stun_left > 0.0:
+		_stun_left -= delta
 		return
 	match _state:
 		State.IDLE:

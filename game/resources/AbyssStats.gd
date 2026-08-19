@@ -22,3 +22,18 @@ class_name AbyssStats
 
 ## Сколько засыпки даёт один блок разобранного Дома.
 @export var house_block_value: int = 5
+
+## T0018+T0019 — Дыхание Бездны. Волна идёт из зева по поверхности и
+## сбивает носильщиков: кара летит в узкое место, как каламити в
+## Dwarf Eats Mountain (`docs/05_References/DesignReferences.md`).
+@export var wave_base_interval: float = 20.0
+
+## Насколько чаще Бездна огрызается за каждую единицу, скормленную
+## с прошлой волны. Кормишь жаднее — бьёт чаще.
+@export var wave_greed: float = 0.08
+
+## Скорость расхождения волны, пикселей в секунду.
+@export var wave_speed: float = 420.0
+
+## Сколько секунд сбитый носильщик стоит оглушённый.
+@export var stun_duration: float = 1.6

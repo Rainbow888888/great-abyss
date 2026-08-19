@@ -10,3 +10,7 @@ reclaim_per_excess = 0.5
 reclaim_interval = 1.0
 stage_threshold = 40
 house_block_value = 5
+wave_base_interval = 20.0
+wave_greed = 0.08
+wave_speed = 420.0
+stun_duration = 1.6

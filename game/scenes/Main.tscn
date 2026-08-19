@@ -101,6 +101,15 @@ wait_time = 1.0
 [node name="GrowTimer" type="Timer" parent="."]
 wait_time = 3.0
 
+[node name="WaveTimer" type="Timer" parent="."]
+wait_time = 20.0
+
+[node name="Volna" type="Line2D" parent="."]
+visible = false
+position = Vector2(760, 280)
+width = 3.0
+default_color = Color(0.62, 0.25, 0.55, 1)
+
 [node name="NewGameButton" type="Button" parent="./UI"]
 offset_left = 950.0
 offset_top = 20.0

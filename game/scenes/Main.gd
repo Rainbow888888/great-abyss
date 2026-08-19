@@ -59,7 +59,7 @@ const SAVE_PATH := "user://save.json"
 
 ## Меняется, когда меняется состав сохраняемых данных. Сейв чужой
 ## версии отбрасывается — начинается новая игра.
-const SAVE_VERSION := 4
+const SAVE_VERSION := 5
 
 ## Интервал автосейва. Технический параметр (частота записи), а не
 ## баланс игры, поэтому константа в коде, а не в `.tres`.
@@ -91,14 +91,16 @@ var carry_capacity := 1
 @onready var _autosave_timer: Timer = $AutosaveTimer
 @onready var _reclaim_timer: Timer = $ReclaimTimer
 @onready var _pylesos: Polygon2D = $Pylesos
-@onready var _dom: Polygon2D = $Dom
-@onready var _house_button: Button = $UI/HouseButton
+@onready var _kristall: Polygon2D = $Kristall
+@onready var _crystal_button: Button = $UI/CrystalButton
+@onready var _grow_timer: Timer = $GrowTimer
 @onready var _nozzle: Node2D = $Pylesos/Nozzle
 
 var _passive_stats := preload("res://game/resources/PassiveGruhrStats.tres")
 var _abyss_stats := preload("res://game/resources/AbyssStats.tres")
 var _gruhr_stats := preload("res://game/resources/GruhrStats.tres")
 var _upgrade_stats := preload("res://game/resources/UpgradeStats.tres")
+var _crystal_stats := preload("res://game/resources/CrystalStats.tres")
 var _chronicle_entries: Resource = preload("res://game/resources/ChronicleEntries.tres")
 
 ## Куча: массив колонок, в каждой — стопка осколков снизу вверх.
@@ -112,7 +114,8 @@ var _columns: Array = []
 var _carriers: Array[Node2D] = []
 var _carry_level := 0
 var _capacity_level := 0
-var _house_blocks := 0
+## Масса растущего кристалла. Чем больше — тем крупнее осколки.
+var _crystal_mass := 0
 var _is_debug_mode := false
 var _pylesos_active := false
 
@@ -135,7 +138,10 @@ func _ready() -> void:
 	$UI/DebugSpeedButton.pressed.connect(_on_debug_speed_button_pressed)
 	$UI/CapacityButton.pressed.connect(_on_capacity_button_pressed)
 	$UI/DebugCapacityButton.pressed.connect(_on_debug_capacity_button_pressed)
-	$UI/HouseButton.pressed.connect(_on_house_button_pressed)
+	$UI/CrystalButton.pressed.connect(_on_crystal_button_pressed)
+	_grow_timer.timeout.connect(_on_grow_timer_timeout)
+	_grow_timer.wait_time = _crystal_stats.grow_interval
+	_grow_timer.start()
 	_reclaim_timer.timeout.connect(_on_reclaim_timer_timeout)
 	_reclaim_timer.wait_time = _abyss_stats.reclaim_interval
 	_reclaim_timer.start()
@@ -153,6 +159,7 @@ func _ready() -> void:
 	_apply_carry_speed()
 	_start_prayer_idle()
 	_material_label.text = "В Бездне: %d" % material_count
+	_refresh_crystal()
 	_update_zasypka()
 	_update_buttons()
 
@@ -172,7 +179,7 @@ func save_game() -> void:
 		"lying_materials": get_tree().get_nodes_in_group("shards").size(),
 		"carry_level": _carry_level,
 		"capacity_level": _capacity_level,
-		"house_blocks": _house_blocks,
+		"crystal_mass": _crystal_mass,
 		"carriers": _carriers.size(),
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
@@ -211,9 +218,7 @@ func load_game() -> void:
 	# debug-кнопкой, тоже должны переживать перезапуск.
 	_carry_level = clampi(int(data.get("carry_level", 0)), 0, DEBUG_MAX_LEVEL)
 	_capacity_level = clampi(int(data.get("capacity_level", 0)), 0, DEBUG_MAX_LEVEL)
-	_house_blocks = maxi(int(data.get("house_blocks", 0)), 0)
-	if _house_blocks > 0:
-		_dom.visible = true
+	_crystal_mass = clampi(int(data.get("crystal_mass", 0)), 0, _crystal_stats.max_mass)
 	for i in int(data.get("lying_materials", 0)):
 		_drop_material(SHARD_ORIGIN, false)
 	for i in maxi(int(data.get("carriers", 1)) - 1, 0):
@@ -242,31 +247,49 @@ func _delivered_value(item: Area2D) -> int:
 		return 0
 	return item.value
 
-func _on_house_button_pressed() -> void:
-	if _house_blocks > 0:
+## Кристалл растёт сам. Игрок ростом не управляет — в этом и смысл:
+## переключатель режимов сделал бы решение бухгалтерским, а растущий
+## сам по себе кристалл делает его искушением («выдержу ли ещё»).
+func _on_grow_timer_timeout() -> void:
+	if _crystal_mass >= _crystal_stats.max_mass:
 		return
-	if not _spend_shards(_upgrade_stats.house_cost):
-		return
-	_house_blocks = _upgrade_stats.house_blocks
-	_dom.visible = true
-	_dom.scale = Vector2(0.2, 0.2)
-	var tween := create_tween()
-	tween.tween_property(_dom, "scale", Vector2(1.0, 1.0), 0.5).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_crystal_mass = mini(_crystal_mass + _crystal_stats.grow_amount, _crystal_stats.max_mass)
+	_refresh_crystal()
 	_update_buttons()
 
-## Разбор Дома: добытчик обращает молитву не к камню, а к собственному
-## дому. Каждый отбитый блок весит намного больше осколка и продолжает
-## засыпать Бездну даже после её пробуждения.
-func _dismantle_house() -> void:
-	_house_blocks -= 1
-	_drop_material(_dom.position + Vector2(0, -40.0), true, _abyss_stats.house_block_value, false)
-	var shake := create_tween()
-	shake.tween_property(_dom, "position:x", _dom.position.x - 4.0, 0.06)
-	shake.tween_property(_dom, "position:x", _dom.position.x, 0.12)
-	if _house_blocks <= 0:
-		var gone := create_tween()
-		gone.tween_property(_dom, "scale", Vector2(1.0, 0.0), 0.4).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
-		gone.tween_callback(func() -> void: _dom.visible = false)
+## Размер на экране — прямое отражение массы. Кристалл и есть индикатор
+## прогресса, пока линия засыпки стоит.
+func _refresh_crystal() -> void:
+	if _crystal_mass <= 0:
+		_kristall.visible = false
+		return
+	_kristall.visible = true
+	var t := float(_crystal_mass) / float(_crystal_stats.max_mass)
+	var target := Vector2(0.35 + t * 0.85, 0.25 + t * 0.95)
+	var tween := create_tween()
+	tween.tween_property(_kristall, "scale", target, 0.35).set_trans(Tween.TRANS_SINE)
+
+## Крупность осколка, который молитва выбивает из Монолита. Кристалл —
+## усилитель, а не источник: Монолит остаётся единственным источником,
+## кристалл лишь делает его отдачу крупнее.
+func _shard_value() -> int:
+	return 1 + int(_crystal_mass / _crystal_stats.mass_per_shard_value)
+
+## Разбить можно в любой момент. Масса уходит в крупные блоки, усиление
+## пропадает, следующий кристалл растёт с нуля — постоянного бонуса нет.
+func _on_crystal_button_pressed() -> void:
+	var blocks := int(_crystal_mass / _crystal_stats.mass_per_block)
+	if blocks <= 0:
+		return
+	_crystal_mass = 0
+	for i in blocks:
+		_drop_material(_kristall.position + Vector2(0, -40.0), true, _crystal_stats.block_value, false)
+	var tween := create_tween()
+	tween.tween_property(_kristall, "scale", Vector2(1.4, 0.1), 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+	tween.tween_callback(func() -> void:
+		_kristall.visible = false
+		_refresh_crystal()
+	)
 	_update_buttons()
 
 ## Добытчик молится: искра летит от него к цели, и только по её прилёту
@@ -283,22 +306,16 @@ func _on_passive_timer_timeout() -> void:
 	spark.polygon = pts
 	spark.position = _gruhr_passive.position + Vector2(0, -12)
 	add_child(spark)
-	# Пока Дом стоит, молитва обращена к нему, а не к камню: Грухр
-	# разбирает то, что сам построил. Это и есть моральный узел игры.
-	var to_house := _house_blocks > 0
-	var target: Vector2 = _dom.position + Vector2(0, -40.0) if to_house else SHARD_ORIGIN
+	var target := SHARD_ORIGIN
 	var tween := create_tween()
 	tween.set_parallel(true)
 	tween.tween_property(spark, "position", target, 0.25).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
 	tween.tween_property(spark, "scale", Vector2(0.4, 0.4), 0.25)
 	tween.finished.connect(func() -> void:
 		spark.queue_free()
-		if to_house and _house_blocks > 0:
-			_dismantle_house()
-			return
 		_squish_monolit()
 		for i in _passive_stats.material_amount:
-			_drop_material(SHARD_ORIGIN)
+			_drop_material(SHARD_ORIGIN, true, _shard_value())
 	)
 
 ## Добытчик всё время в молитве — медленное дыхание на месте.
@@ -538,14 +555,11 @@ func _update_buttons() -> void:
 		var cap_cost := _capacity_cost()
 		_capacity_button.text = "Носить больше [%d]" % cap_cost
 		_capacity_button.disabled = _pile_size() < cap_cost
-	if _house_blocks > 0:
-		_house_button.text = "Дом разбирают [%d]" % _house_blocks
-		_house_button.disabled = true
-	else:
-		_house_button.text = "Построить дом [%d]" % _upgrade_stats.house_cost
-		_house_button.disabled = _pile_size() < _upgrade_stats.house_cost
+	var blocks := int(_crystal_mass / _crystal_stats.mass_per_block)
+	_crystal_button.text = "Разбить кристалл [%d блоков]" % blocks
+	_crystal_button.disabled = blocks <= 0
 	var awake := " — Бездна проснулась, осколки ей мало" if _is_abyss_awake() else ""
-	_shard_label.text = "Осколков в куче: %d (по %d за ходку)%s" % [_pile_size(), carry_capacity, awake]
+	_shard_label.text = "Осколков в куче: %d (по %d за ходку) | кристалл: %d, осколок ×%d%s" % [_pile_size(), carry_capacity, _crystal_mass, _shard_value(), awake]
 
 ## Куча меняется от многих причин — добычи, переноски, воровства, трат.
 ## Дёргать кнопки на каждое событие было бы россыпью вызовов, поэтому

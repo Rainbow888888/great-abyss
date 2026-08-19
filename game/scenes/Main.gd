@@ -26,16 +26,19 @@ const SURFACE_Y := 280.0
 const GROUND_Y := SURFACE_Y - 3.0
 
 ## Куда носильщик доходит, чтобы сбросить груз: у левой кромки зева.
-const THROW_X := 590.0
+const THROW_X := 735.0
 
 ## Правая грань Монолита — точка, куда бьёт молитва и откуда летит осколок.
-const SHARD_ORIGIN := Vector2(335.0, 230.0)
+## Добытчик стоит с ДАЛЬНЕЙ от Бездны стороны камня (ADR-005): Монолит
+## заслоняет молящегося от волны, и это объясняется геометрией, а не
+## исключением в коде.
+const SHARD_ORIGIN := Vector2(295.0, 230.0)
 
 ## Куча осколков: ложится справа от добытчика, между ним и Бездной.
 ## Куча разбита на колонки. Осколок падает в свою колонку, но если она
 ## сильно выше соседней — скатывается вбок. Из этого сама собой
 ## получается горка с постоянным углом откоса, а не столбики.
-const PILE_LEFT_X := 340.0
+const PILE_LEFT_X := 310.0
 const PILE_COLUMNS := 84
 const COLUMN_W := 2.6
 const MATERIAL_H := 2.4
@@ -275,8 +278,8 @@ func _pulse_rezonans() -> void:
 	_rezonans.visible = true
 	_rezonans.points = PackedVector2Array([_monolit.position, _kristall.position + Vector2(0, -30.0)])
 	var tween := create_tween()
-	tween.tween_property(_rezonans, "modulate:a", 0.75, 0.1)
-	tween.tween_property(_rezonans, "modulate:a", 0.18, 0.6)
+	tween.tween_property(_rezonans, "modulate:a", 0.95, 0.1)
+	tween.tween_property(_rezonans, "modulate:a", 0.3, 0.6)
 
 ## Размер на экране — прямое отражение массы. Кристалл и есть индикатор
 ## прогресса, пока линия засыпки стоит.
@@ -321,18 +324,18 @@ func _on_passive_timer_timeout() -> void:
 	var spark := Polygon2D.new()
 	spark.color = Color(0.95, 0.95, 0.78, 1)
 	var pts := PackedVector2Array()
-	pts.push_back(Vector2(0, -5))
-	pts.push_back(Vector2(3, 0))
-	pts.push_back(Vector2(0, 5))
-	pts.push_back(Vector2(-3, 0))
+	pts.push_back(Vector2(0, -10))
+	pts.push_back(Vector2(6, 0))
+	pts.push_back(Vector2(0, 10))
+	pts.push_back(Vector2(-6, 0))
 	spark.polygon = pts
 	spark.position = _gruhr_passive.position + Vector2(0, -12)
 	add_child(spark)
 	var target := SHARD_ORIGIN
 	var tween := create_tween()
 	tween.set_parallel(true)
-	tween.tween_property(spark, "position", target, 0.25).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
-	tween.tween_property(spark, "scale", Vector2(0.4, 0.4), 0.25)
+	tween.tween_property(spark, "position", target, 0.45).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	tween.tween_property(spark, "scale", Vector2(0.35, 0.35), 0.45)
 	tween.finished.connect(func() -> void:
 		spark.queue_free()
 		_squish_monolit()

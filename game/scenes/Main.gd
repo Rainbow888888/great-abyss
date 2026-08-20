@@ -126,6 +126,10 @@ var _crystal_mass := 0
 var _wave_radius := -1.0
 var _wave_hit: Array = []
 var _fill_at_last_wave := 0
+
+## Замах: пока больше нуля, Бездна набирает воздух и клик пригибает племя.
+var _tell_left := -1.0
+var _ducked := false
 var _is_debug_mode := false
 var _pylesos_active := false
 
@@ -599,6 +603,10 @@ func _update_buttons() -> void:
 ## Дёргать кнопки на каждое событие было бы россыпью вызовов, поэтому
 ## следим за размером кучи и обновляем UI, только когда он изменился.
 func _process(delta: float) -> void:
+	if _tell_left > 0.0:
+		_tell_left -= delta
+		if _tell_left <= 0.0:
+			_launch_wave()
 	_advance_wave(delta)
 	var size := _pile_size()
 	if size != _last_pile_size:
@@ -869,12 +877,43 @@ func _arm_wave() -> void:
 	_wave_timer.wait_time = maxf(interval, _abyss_stats.wave_floor_interval)
 	_wave_timer.start()
 
+## Волна начинается не сразу: сначала Бездна видимо набирает воздух.
+## Полторы секунды — окно, в которое игрок может ответить (ADR-005).
 func _on_wave_timer_timeout() -> void:
+	_tell_left = _abyss_stats.tell_duration
+	_ducked = false
+	var tween := create_tween()
+	tween.tween_property(_bezdna, "scale", Vector2(0.9, 0.94), _abyss_stats.tell_duration).set_trans(Tween.TRANS_SINE)
+	tween.parallel().tween_property(_bezdna, "modulate", Color(2.6, 1.1, 2.4, 1), _abyss_stats.tell_duration)
+	_arm_wave()
+
+## Клик в любом месте во время замаха — всё племя разом пригибается.
+## Именно всё, а не по одному: при дюжине носильщиков дюжина кликов за
+## полторы секунды невозможна, и защита слабела бы с прогрессом игрока.
+func _input(event: InputEvent) -> void:
+	if _tell_left <= 0.0 or _ducked:
+		return
+	if not (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT):
+		return
+	_ducked = true
+	for c in _carriers:
+		if is_instance_valid(c):
+			c.duck(_abyss_stats.duck_duration)
+
+func _launch_wave() -> void:
+	_tell_left = -1.0
 	_wave_radius = 0.0
 	_wave_hit.clear()
+	# Успевшие пригнуться волну пропускают над собой.
+	if _ducked:
+		for c in _carriers:
+			_wave_hit.append(c)
 	_volna.visible = true
 	_volna.modulate.a = 0.9
-	_arm_wave()
+	var back := create_tween()
+	back.tween_property(_bezdna, "scale", Vector2(1.12, 1.06), 0.12).set_trans(Tween.TRANS_BACK)
+	back.parallel().tween_property(_bezdna, "modulate", Color(1, 1, 1, 1), 0.3)
+	back.tween_property(_bezdna, "scale", Vector2(1.0, 1.0), 0.25).set_trans(Tween.TRANS_SINE)
 
 ## Волна расходится из зева. Кого накрыло — того сбивает: груз падает
 ## обратно в кучу, носильщик стоит оглушённый. Носильщики и есть узкое

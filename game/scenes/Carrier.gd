@@ -25,11 +25,27 @@ var _throw_x := 0.0
 ## Сколько секунд носильщик ещё оглушён волной Бездны.
 var _stun_left := 0.0
 
+## Пригибание по команде игрока: короткий простой, но груз при себе.
+var _duck_left := 0.0
+
+## Игрок успел скомандовать «ложись»: носильщик приникает к земле,
+## теряет секунду работы и волну пропускает над собой. Груз остаётся —
+## платим временем, а не работой (ADR-005).
+func duck(duration: float) -> void:
+	if _stun_left > 0.0:
+		return
+	_duck_left = maxf(_duck_left, duration)
+	var tween := create_tween()
+	tween.tween_property(self, "scale", Vector2(1.35, 0.4), 0.1)
+	tween.tween_interval(maxf(duration - 0.22, 0.0))
+	tween.tween_property(self, "scale", Vector2(1.0, 1.0), 0.12)
+
 ## Волна Бездны сбивает носильщика: он роняет груз обратно в кучу и
 ## какое-то время не может идти. Кара бьёт по транспорту — по узкому
 ## месту игры (`docs/05_References/DesignReferences.md`).
 func stun(duration: float) -> void:
 	_stun_left = maxf(_stun_left, duration)
+	_duck_left = 0.0
 	if is_instance_valid(_target):
 		_main.release_material(_target)
 		_target = null
@@ -39,8 +55,11 @@ func stun(duration: float) -> void:
 	_carried.clear()
 	_state = State.IDLE
 	var tween := create_tween()
-	tween.tween_property(self, "modulate", Color(1.4, 0.7, 0.7, 1), 0.1)
-	tween.tween_property(self, "modulate", Color(1, 1, 1, 1), duration)
+	tween.tween_property(self, "scale", Vector2(1.5, 0.3), 0.12)
+	tween.tween_property(self, "modulate", Color(1.3, 0.7, 0.7, 1), 0.05)
+	tween.tween_interval(maxf(duration - 0.5, 0.0))
+	tween.tween_property(self, "scale", Vector2(1.0, 1.0), 0.2)
+	tween.tween_property(self, "modulate", Color(1, 1, 1, 1), 0.15)
 
 func is_stunned() -> bool:
 	return _stun_left > 0.0
@@ -53,6 +72,11 @@ func setup(main: Node, throw_x: float) -> void:
 
 func _process(delta: float) -> void:
 	if _main == null:
+		return
+	if _duck_left > 0.0:
+		_duck_left -= delta
+		# Груз пригибается вместе с носильщиком, а не висит в воздухе.
+		_hold_carried()
 		return
 	if _stun_left > 0.0:
 		_stun_left -= delta

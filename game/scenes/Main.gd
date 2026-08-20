@@ -922,22 +922,27 @@ func _unhandled_input(event: InputEvent) -> void:
 
 ## Всё племя разом, а не по одному: при дюжине носильщиков дюжина
 ## кликов за замах невозможна, и защита слабела бы с прогрессом игрока.
+##
+## Пригнувшийся держится до прохода фронта, а не ровно секунду. Отсюда
+## настоящая цена тайминга: пригнулся в начале замаха — пролежал все
+## четыре секунды и потерял работу; пригнулся под конец — потерял
+## полторы. Раньше флаг «увернулись» держался весь замах, и момент
+## нажатия не значил ничего.
 func duck_all() -> void:
-	if _tell_left > 0.0:
-		_ducked = true
 	for c in _carriers:
-		if is_instance_valid(c):
-			c.duck(_abyss_stats.duck_duration)
+		if not is_instance_valid(c):
+			continue
+		var hold: float = _abyss_stats.duck_duration
+		if _tell_left > 0.0:
+			var transit: float = absf(c.position.x - _volna.position.x) / _abyss_stats.wave_speed
+			hold = maxf(hold, _tell_left + transit + 0.15)
+		c.duck(hold)
 
 func _launch_wave() -> void:
 	_tell_left = -1.0
 	_zamah.visible = false
 	_wave_radius = 0.0
 	_wave_hit.clear()
-	# Успевшие пригнуться волну пропускают над собой.
-	if _ducked:
-		for c in _carriers:
-			_wave_hit.append(c)
 	_volna.visible = true
 	_volna.modulate.a = 0.9
 	var back := create_tween()

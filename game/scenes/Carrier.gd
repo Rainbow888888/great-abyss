@@ -28,6 +28,23 @@ var _stun_left := 0.0
 ## Пригибание по команде игрока: короткий простой, но груз при себе.
 var _duck_left := 0.0
 
+## Анимация позы. Пригибание и оглушение дёргают одни и те же `scale`
+## и `modulate`; без остановки предыдущей два твина тянут носильщика
+## в разные стороны, и он превращается в растянутую кляксу.
+var _pose_tween: Tween = null
+
+## Высота, на которой носильщик стоит нормально. Сплющенная фигура
+## должна ЛЕЖАТЬ на поверхности, а не висеть по центру своего роста —
+## иначе она читается не как упавший Грухр, а как артефакт.
+var _base_y := 0.0
+const BODY_R := 8.0
+
+func _reset_pose_tween() -> Tween:
+	if _pose_tween != null and _pose_tween.is_valid():
+		_pose_tween.kill()
+	_pose_tween = create_tween()
+	return _pose_tween
+
 ## Игрок успел скомандовать «ложись»: носильщик приникает к земле,
 ## теряет секунду работы и волну пропускает над собой. Груз остаётся —
 ## платим временем, а не работой (ADR-005).
@@ -35,10 +52,14 @@ func duck(duration: float) -> void:
 	if _stun_left > 0.0:
 		return
 	_duck_left = maxf(_duck_left, duration)
-	var tween := create_tween()
-	tween.tween_property(self, "scale", Vector2(1.35, 0.4), 0.1)
-	tween.tween_interval(maxf(duration - 0.22, 0.0))
-	tween.tween_property(self, "scale", Vector2(1.0, 1.0), 0.12)
+	# Присел: цвет свой, поза низкая. Он в порядке, просто пригнулся.
+	var tween := _reset_pose_tween()
+	tween.set_parallel(true)
+	tween.tween_property(self, "scale", Vector2(1.3, 0.5), 0.1)
+	tween.tween_property(self, "position:y", _y_for_squash(0.5), 0.1)
+	tween.chain().tween_interval(maxf(duration - 0.22, 0.0))
+	tween.chain().tween_property(self, "scale", Vector2(1.0, 1.0), 0.12)
+	tween.parallel().tween_property(self, "position:y", _base_y, 0.12)
 
 ## Волна Бездны сбивает носильщика: он роняет груз обратно в кучу и
 ## какое-то время не может идти. Кара бьёт по транспорту — по узкому
@@ -54,21 +75,34 @@ func stun(duration: float) -> void:
 			_main.release_material(item)
 	_carried.clear()
 	_state = State.IDLE
-	var tween := create_tween()
-	tween.tween_property(self, "scale", Vector2(1.5, 0.3), 0.12)
-	tween.tween_property(self, "modulate", Color(1.3, 0.7, 0.7, 1), 0.05)
-	tween.tween_interval(maxf(duration - 0.5, 0.0))
-	tween.tween_property(self, "scale", Vector2(1.0, 1.0), 0.2)
-	tween.tween_property(self, "modulate", Color(1, 1, 1, 1), 0.15)
+	# Сбит: лежит на земле и обесцвечен. Цвет отличает «в отключке» от
+	# «присел» — поза у них похожая, состояние разное.
+	var tween := _reset_pose_tween()
+	tween.set_parallel(true)
+	tween.tween_property(self, "scale", Vector2(1.3, 0.35), 0.12)
+	tween.tween_property(self, "position:y", _y_for_squash(0.35), 0.12)
+	tween.tween_property(self, "modulate", Color(0.6, 0.62, 0.66, 1), 0.12)
+	tween.chain().tween_interval(maxf(duration - 0.4, 0.0))
+	tween.chain().tween_property(self, "scale", Vector2(1.0, 1.0), 0.22).set_trans(Tween.TRANS_BACK)
+	tween.parallel().tween_property(self, "position:y", _base_y, 0.22)
+	tween.parallel().tween_property(self, "modulate", Color(1, 1, 1, 1), 0.22)
 
 func is_stunned() -> bool:
 	return _stun_left > 0.0
+
+func is_ducking() -> bool:
+	return _duck_left > 0.0
 
 ## Точку сброса передаём значением, а не читаем константу с чужого
 ## скрипта: так носильщик не зависит от устройства Main.
 func setup(main: Node, throw_x: float) -> void:
 	_main = main
 	_throw_x = throw_x
+	_base_y = position.y
+
+## Куда опустить центр, чтобы тело нужной высоты легло на землю.
+func _y_for_squash(sy: float) -> float:
+	return _base_y + BODY_R * (1.0 - sy)
 
 func _process(delta: float) -> void:
 	if _main == null:

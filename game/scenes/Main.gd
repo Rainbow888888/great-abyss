@@ -155,6 +155,7 @@ func _ready() -> void:
 	$UI/DebugCapacityButton.pressed.connect(_on_debug_capacity_button_pressed)
 	$UI/CrystalButton.pressed.connect(_on_crystal_button_pressed)
 	$UI/DuckButton.pressed.connect(duck_all)
+	$UI/DebugWaveButton.pressed.connect(_on_wave_timer_timeout)
 	_wave_timer.timeout.connect(_on_wave_timer_timeout)
 	_arm_wave()
 	_reclaim_timer.timeout.connect(_on_reclaim_timer_timeout)
@@ -956,9 +957,16 @@ func _advance_wave(delta: float) -> void:
 	for c in _carriers:
 		if not is_instance_valid(c) or c in _wave_hit:
 			continue
-		if absf(c.position.x - _volna.position.x) <= _wave_radius:
-			_wave_hit.append(c)
-			c.stun(_abyss_stats.stun_duration)
+		if absf(c.position.x - _volna.position.x) > _wave_radius:
+			continue
+		_wave_hit.append(c)
+		# Пригнувшийся в момент, когда до него докатился фронт, уцелел.
+		# Опоздавшая команда спасает тех, кого волна ещё не достала:
+		# частичный зачёт за позднюю реакцию, и он читается на экране —
+		# ближние к Бездне уже лежат, дальние успели присесть.
+		if c.is_ducking():
+			continue
+		c.stun(_abyss_stats.stun_duration)
 	if _wave_radius > 900.0:
 		_wave_radius = -1.0
 		_volna.visible = false

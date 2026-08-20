@@ -14,6 +14,6 @@ wave_base_interval = 45.0
 wave_floor_interval = 25.0
 wave_greed = 0.08
 wave_speed = 420.0
-tell_duration = 1.5
+tell_duration = 4.0
 duck_duration = 1.0
 stun_duration = 20.0

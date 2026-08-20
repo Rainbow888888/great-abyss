@@ -107,6 +107,12 @@ modulate = Color(1, 1, 1, 0.18)
 width = 2.0
 default_color = Color(0.6, 0.9, 0.85, 1)
 
+[node name="Zamah" type="Line2D" parent="."]
+visible = false
+position = Vector2(900, 280)
+width = 2.0
+default_color = Color(0.78, 0.35, 0.72, 1)
+
 [node name="Volna" type="Line2D" parent="."]
 visible = false
 position = Vector2(900, 280)
@@ -150,6 +156,13 @@ polygon = PackedVector2Array(0, -70, 16, -44, 13, 0, -13, 0, -16, -44)
 [node name="Gran" type="Polygon2D" parent="Kristall"]
 color = Color(0.72, 0.95, 0.9, 1)
 polygon = PackedVector2Array(0, -70, 6, -44, 4, 0, -4, 0, -6, -44)
+
+[node name="DuckButton" type="Button" parent="./UI"]
+offset_left = 620.0
+offset_top = 200.0
+offset_right = 810.0
+offset_bottom = 228.0
+text = "Ложись! (ПКМ / пробел)"
 
 [node name="CrystalButton" type="Button" parent="./UI"]
 offset_left = 620.0

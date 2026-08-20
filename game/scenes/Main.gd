@@ -99,6 +99,7 @@ var carry_capacity := 1
 @onready var _rezonans: Line2D = $Rezonans
 @onready var _wave_timer: Timer = $WaveTimer
 @onready var _volna: Line2D = $Volna
+@onready var _zamah: Line2D = $Zamah
 @onready var _nozzle: Node2D = $Pylesos/Nozzle
 
 var _passive_stats := preload("res://game/resources/PassiveGruhrStats.tres")
@@ -153,6 +154,7 @@ func _ready() -> void:
 	$UI/CapacityButton.pressed.connect(_on_capacity_button_pressed)
 	$UI/DebugCapacityButton.pressed.connect(_on_debug_capacity_button_pressed)
 	$UI/CrystalButton.pressed.connect(_on_crystal_button_pressed)
+	$UI/DuckButton.pressed.connect(duck_all)
 	_wave_timer.timeout.connect(_on_wave_timer_timeout)
 	_arm_wave()
 	_reclaim_timer.timeout.connect(_on_reclaim_timer_timeout)
@@ -605,6 +607,11 @@ func _update_buttons() -> void:
 func _process(delta: float) -> void:
 	if _tell_left > 0.0:
 		_tell_left -= delta
+		# Кольцо сходится к зеву: сколько осталось до удара, видно
+		# по его размеру, без цифр и без отдельного индикатора.
+		var t: float = clampf(_tell_left / _abyss_stats.tell_duration, 0.0, 1.0)
+		_build_arc(_zamah, 60.0 + t * 640.0)
+		_zamah.modulate.a = 0.35 + (1.0 - t) * 0.55
 		if _tell_left <= 0.0:
 			_launch_wave()
 	_advance_wave(delta)
@@ -861,12 +868,15 @@ func _spawn_air_flow(from: Vector2, to: Vector2) -> void:
 ## Дуга перестраивается по реальному радиусу, а не масштабируется:
 ## `Line2D` масштабирует и толщину линии, и волна превращалась в купол.
 ## Полукруг вверх — волна идёт по поверхности, не под землёй.
-func _build_wave_arc(radius: float) -> void:
+func _build_arc(line: Line2D, radius: float) -> void:
 	var pts := PackedVector2Array()
 	for i in 33:
 		var a := PI + PI * float(i) / 32.0
 		pts.push_back(Vector2(cos(a) * radius, sin(a) * radius * 0.55))
-	_volna.points = pts
+	line.points = pts
+
+func _build_wave_arc(radius: float) -> void:
+	_build_arc(_volna, radius)
 
 ## Чем больше засыпали с прошлой волны, тем скорее следующая. Бездна
 ## огрызается на жадность, а не по расписанию.
@@ -882,26 +892,45 @@ func _arm_wave() -> void:
 func _on_wave_timer_timeout() -> void:
 	_tell_left = _abyss_stats.tell_duration
 	_ducked = false
+	_zamah.visible = true
+	_zamah.modulate.a = 0.85
 	var tween := create_tween()
 	tween.tween_property(_bezdna, "scale", Vector2(0.9, 0.94), _abyss_stats.tell_duration).set_trans(Tween.TRANS_SINE)
 	tween.parallel().tween_property(_bezdna, "modulate", Color(2.6, 1.1, 2.4, 1), _abyss_stats.tell_duration)
 	_arm_wave()
 
-## Клик в любом месте во время замаха — всё племя разом пригибается.
-## Именно всё, а не по одному: при дюжине носильщиков дюжина кликов за
-## полторы секунды невозможна, и защита слабела бы с прогрессом игрока.
-func _input(event: InputEvent) -> void:
-	if _tell_left <= 0.0 or _ducked:
+## Команда «ложись» — правая кнопка, пробел или кнопка в интерфейсе.
+## Доступна ВСЕГДА, а не только в замах: до первой волны игрок не
+## понимает, зачем это, но привыкает к действию, и когда волны начнутся,
+## ответ уже в пальцах.
+##
+## Левая кнопка сюда не годится. `Area2D.input_event` срабатывает при
+## физическом пикинге, а он идёт ПОСЛЕ распространения ввода — пометить
+## клик по Монолиту обработанным оттуда невозможно в принципе. Левый клик
+## клал бы племя на каждой добыче.
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.pressed and mb.button_index == MOUSE_BUTTON_RIGHT:
+			duck_all()
 		return
-	if not (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT):
-		return
-	_ducked = true
+	if event is InputEventKey:
+		var kb := event as InputEventKey
+		if kb.pressed and not kb.echo and kb.keycode == KEY_SPACE:
+			duck_all()
+
+## Всё племя разом, а не по одному: при дюжине носильщиков дюжина
+## кликов за замах невозможна, и защита слабела бы с прогрессом игрока.
+func duck_all() -> void:
+	if _tell_left > 0.0:
+		_ducked = true
 	for c in _carriers:
 		if is_instance_valid(c):
 			c.duck(_abyss_stats.duck_duration)
 
 func _launch_wave() -> void:
 	_tell_left = -1.0
+	_zamah.visible = false
 	_wave_radius = 0.0
 	_wave_hit.clear()
 	# Успевшие пригнуться волну пропускают над собой.

@@ -87,6 +87,22 @@ func stun(duration: float) -> void:
 	tween.parallel().tween_property(self, "position:y", _base_y, 0.22)
 	tween.parallel().tween_property(self, "modulate", Color(1, 1, 1, 1), 0.22)
 
+## Волна докатилась, но носильщик устоял — согнуло, не свалило.
+## Груз при себе, простой короткий. Отличается от «присел» и «сбит»
+## именно ростом: он остаётся высоко, те двое лежат (ADR-005 — состояния
+## различаются высотой над землёй, а не деталью позы).
+func withstand(duration: float) -> void:
+	if _stun_left > 0.0:
+		return
+	_duck_left = maxf(_duck_left, duration)
+	var tween := _reset_pose_tween()
+	tween.set_parallel(true)
+	tween.tween_property(self, "scale", Vector2(1.12, 0.82), 0.08)
+	tween.tween_property(self, "position:y", _y_for_squash(0.82), 0.08)
+	tween.chain().tween_interval(maxf(duration - 0.3, 0.0))
+	tween.chain().tween_property(self, "scale", Vector2(1.0, 1.0), 0.22).set_trans(Tween.TRANS_BACK)
+	tween.parallel().tween_property(self, "position:y", _base_y, 0.22)
+
 func is_stunned() -> bool:
 	return _stun_left > 0.0
 

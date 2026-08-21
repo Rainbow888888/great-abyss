@@ -1,6 +1,6 @@
 [gd_resource type="Resource" script_class="AbyssStats" format=3 uid="uid://x574514d8gst"]
 
-[ext_resource type="Script" uid="uid://kvlip82umn3l" path="res://game/resources/AbyssStats.gd" id="1_abyss"]
+[ext_resource type="Script" uid="uid://dmfndjg3fbta0" path="res://game/resources/AbyssStats.gd" id="1_abyss"]
 
 [resource]
 script = ExtResource("1_abyss")
@@ -17,3 +17,5 @@ wave_speed = 420.0
 tell_duration = 4.0
 duck_duration = 1.0
 stun_duration = 20.0
+wave_stand_chance = 0.35
+stand_stagger = 2.0

@@ -971,6 +971,13 @@ func _advance_wave(delta: float) -> void:
 		# ближние к Бездне уже лежат, дальние успели присесть.
 		if c.is_ducking():
 			continue
+		# Не успел пригнуться — ещё не приговор. Часть племени устоит:
+		# волна, валящая всех разом, останавливает работу целиком и потому
+		# читается налогом. Уворот спасает всех и без кубика, так что
+		# следить за замахом по-прежнему строго выгоднее (ADR-005, ред. 5).
+		if randf() < _abyss_stats.wave_stand_chance:
+			c.withstand(_abyss_stats.stand_stagger)
+			continue
 		c.stun(_abyss_stats.stun_duration)
 	if _wave_radius > 900.0:
 		_wave_radius = -1.0

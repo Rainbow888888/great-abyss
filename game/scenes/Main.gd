@@ -166,6 +166,13 @@ func _ready() -> void:
 	first_carrier.setup(self, THROW_X)
 	_carriers.append(first_carrier)
 
+	# Добытчик получает ту же фигуру, что и носильщики, — иначе рядом
+	# стояли бы гном и кружок. Цвет остаётся свой: им они и различаются.
+	var figura := GruhrBody.new()
+	figura.build(_gruhr_passive.color)
+	_gruhr_passive.add_child(figura)
+	_gruhr_passive.polygon = PackedVector2Array()
+
 	_passive_timer.wait_time = _passive_stats.interval
 	_passive_timer.start()
 	_autosave_timer.wait_time = AUTOSAVE_INTERVAL

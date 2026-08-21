@@ -28,22 +28,28 @@ var _stun_left := 0.0
 ## Пригибание по команде игрока: короткий простой, но груз при себе.
 var _duck_left := 0.0
 
-## Анимация позы. Пригибание и оглушение дёргают одни и те же `scale`
-## и `modulate`; без остановки предыдущей два твина тянут носильщика
-## в разные стороны, и он превращается в растянутую кляксу.
-var _pose_tween: Tween = null
+## Фигура: ноги, туника, рука, голова, борода. Позы живут в ней,
+## носильщик только говорит, какую встать.
+var _figura: GruhrBody = null
 
-## Высота, на которой носильщик стоит нормально. Сплющенная фигура
-## должна ЛЕЖАТЬ на поверхности, а не висеть по центру своего роста —
-## иначе она читается не как упавший Грухр, а как артефакт.
-var _base_y := 0.0
-const BODY_R := 8.0
+## Обесцвечивание при оглушении. Живёт отдельно от позы: поза двигает
+## части, цвет красит всю фигуру разом через `modulate` носильщика.
+var _fade_tween: Tween = null
 
-func _reset_pose_tween() -> Tween:
-	if _pose_tween != null and _pose_tween.is_valid():
-		_pose_tween.kill()
-	_pose_tween = create_tween()
-	return _pose_tween
+## Носильщик — бывший кружок радиусом 8. Полигон гасится, на его место
+## встаёт фигура: так не пришлось трогать ни `Carrier.tscn`, ни
+## `Main.tscn`, где первый Грухр лежит отдельным узлом со своим цветом.
+func _ready() -> void:
+	_figura = GruhrBody.new()
+	_figura.build(color)
+	add_child(_figura)
+	polygon = PackedVector2Array()
+
+func _fade_to(c: Color, secs: float) -> void:
+	if _fade_tween != null and _fade_tween.is_valid():
+		_fade_tween.kill()
+	_fade_tween = create_tween()
+	_fade_tween.tween_property(self, "modulate", c, secs)
 
 ## Игрок успел скомандовать «ложись»: носильщик приникает к земле,
 ## теряет секунду работы и волну пропускает над собой. Груз остаётся —
@@ -52,14 +58,8 @@ func duck(duration: float) -> void:
 	if _stun_left > 0.0:
 		return
 	_duck_left = maxf(_duck_left, duration)
-	# Присел: цвет свой, поза низкая. Он в порядке, просто пригнулся.
-	var tween := _reset_pose_tween()
-	tween.set_parallel(true)
-	tween.tween_property(self, "scale", Vector2(1.3, 0.5), 0.1)
-	tween.tween_property(self, "position:y", _y_for_squash(0.5), 0.1)
-	tween.chain().tween_interval(maxf(duration - 0.22, 0.0))
-	tween.chain().tween_property(self, "scale", Vector2(1.0, 1.0), 0.12)
-	tween.parallel().tween_property(self, "position:y", _base_y, 0.12)
+	# Присел: цвет свой, ноги подогнуты почти до земли. Он в порядке.
+	_figura.set_pose("duck", duration)
 
 ## Волна Бездны сбивает носильщика: он роняет груз обратно в кучу и
 ## какое-то время не может идти. Кара бьёт по транспорту — по узкому
@@ -75,17 +75,14 @@ func stun(duration: float) -> void:
 			_main.release_material(item)
 	_carried.clear()
 	_state = State.IDLE
-	# Сбит: лежит на земле и обесцвечен. Цвет отличает «в отключке» от
-	# «присел» — поза у них похожая, состояние разное.
-	var tween := _reset_pose_tween()
-	tween.set_parallel(true)
-	tween.tween_property(self, "scale", Vector2(1.3, 0.35), 0.12)
-	tween.tween_property(self, "position:y", _y_for_squash(0.35), 0.12)
-	tween.tween_property(self, "modulate", Color(0.6, 0.62, 0.66, 1), 0.12)
-	tween.chain().tween_interval(maxf(duration - 0.4, 0.0))
-	tween.chain().tween_property(self, "scale", Vector2(1.0, 1.0), 0.22).set_trans(Tween.TRANS_BACK)
-	tween.parallel().tween_property(self, "position:y", _base_y, 0.22)
-	tween.parallel().tween_property(self, "modulate", Color(1, 1, 1, 1), 0.22)
+	# Сбит: лежит поперёк и обесцвечен. От присевшего его отличает уже
+	# не только цвет — лежащий занимает пять пикселей высоты вместо
+	# двенадцати, и это видно без всякого сравнения.
+	_figura.set_pose("down", duration)
+	_fade_to(Color(0.6, 0.62, 0.66, 1), 0.12)
+	var back := create_tween()
+	back.tween_interval(maxf(duration - 0.34, 0.0))
+	back.tween_callback(func() -> void: _fade_to(Color(1, 1, 1, 1), 0.22))
 
 ## Волна докатилась, но носильщик устоял — согнуло, не свалило.
 ## Груз при себе, простой короткий. Отличается от «присел» и «сбит»
@@ -95,13 +92,7 @@ func withstand(duration: float) -> void:
 	if _stun_left > 0.0:
 		return
 	_duck_left = maxf(_duck_left, duration)
-	var tween := _reset_pose_tween()
-	tween.set_parallel(true)
-	tween.tween_property(self, "scale", Vector2(1.12, 0.82), 0.08)
-	tween.tween_property(self, "position:y", _y_for_squash(0.82), 0.08)
-	tween.chain().tween_interval(maxf(duration - 0.3, 0.0))
-	tween.chain().tween_property(self, "scale", Vector2(1.0, 1.0), 0.22).set_trans(Tween.TRANS_BACK)
-	tween.parallel().tween_property(self, "position:y", _base_y, 0.22)
+	_figura.set_pose("withstand", duration)
 
 func is_stunned() -> bool:
 	return _stun_left > 0.0
@@ -114,11 +105,6 @@ func is_ducking() -> bool:
 func setup(main: Node, throw_x: float) -> void:
 	_main = main
 	_throw_x = throw_x
-	_base_y = position.y
-
-## Куда опустить центр, чтобы тело нужной высоты легло на землю.
-func _y_for_squash(sy: float) -> float:
-	return _base_y + BODY_R * (1.0 - sy)
 
 func _process(delta: float) -> void:
 	if _main == null:
@@ -154,6 +140,7 @@ func _process(delta: float) -> void:
 					_main.deliver_material(item)
 				_carried.clear()
 				_state = State.IDLE
+	_figura.set_walking(_state != State.IDLE)
 	_hold_carried()
 
 func _is_full() -> bool:
@@ -162,13 +149,16 @@ func _is_full() -> bool:
 ## Раскладывает груз дугой над головой — по одному осколку видно, что
 ## носильщик несёт один, по пяти видно, что пять.
 func _hold_carried() -> void:
+	# Груз опускается вместе с позой: раньше это выходило само, потому
+	# что позу играл сам носильщик, теперь двигается фигура внутри.
+	var sag := Vector2(0.0, _figura.pose_offset())
 	for i in _carried.size():
 		var item: Area2D = _carried[i]
 		if not is_instance_valid(item):
 			continue
 		var offset := (i - (_carried.size() - 1) * 0.5) * ORBIT_SPREAD
 		var angle := -PI * 0.5 + offset
-		item.position = position + Vector2(cos(angle), sin(angle)) * ORBIT_RADIUS
+		item.position = position + sag + Vector2(cos(angle), sin(angle)) * ORBIT_RADIUS
 
 ## Двигает носильщика к цели по горизонтали. true — дошёл.
 func _step_toward(target_x: float, delta: float) -> bool:

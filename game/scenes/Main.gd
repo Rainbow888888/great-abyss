@@ -97,6 +97,7 @@ var carry_capacity := 1
 @onready var _kristall: Polygon2D = $Kristall
 @onready var _crystal_button: Button = $UI/CrystalButton
 @onready var _rezonans: Line2D = $Rezonans
+@onready var _cataclysm_label: Label = $UI/CataclysmLabel
 @onready var _wave_timer: Timer = $WaveTimer
 @onready var _volna: Line2D = $Volna
 @onready var _zamah: Line2D = $Zamah
@@ -131,6 +132,15 @@ var _fill_at_last_wave := 0
 ## Замах: пока больше нуля, Бездна набирает воздух и клик пригибает племя.
 var _tell_left := -1.0
 var _ducked := false
+
+## Какой катаклизм придёт следующим. Пока он один, но счётчик обязан
+## называть его по имени: разные катаклизмы требуют разных ответов, и
+## без имени готовиться не к чему (`docs/03_Gameplay/Cataclysms.md`).
+var _next_kind := "Волна"
+
+## Счётчик красный только во время замаха. Цвет переключается на
+## переходе, а не каждый кадр: тема — не то, что стоит трогать в цикле.
+var _label_alarm := false
 var _is_debug_mode := false
 var _pylesos_active := false
 
@@ -613,6 +623,7 @@ func _update_buttons() -> void:
 ## Дёргать кнопки на каждое событие было бы россыпью вызовов, поэтому
 ## следим за размером кучи и обновляем UI, только когда он изменился.
 func _process(delta: float) -> void:
+	_update_cataclysm_label()
 	if _tell_left > 0.0:
 		_tell_left -= delta
 		# Кольцо сходится к зеву: сколько осталось до удара, видно
@@ -882,6 +893,27 @@ func _build_arc(line: Line2D, radius: float) -> void:
 		var a := PI + PI * float(i) / 32.0
 		pts.push_back(Vector2(cos(a) * radius, sin(a) * radius * 0.55))
 	line.points = pts
+
+## Счётчик катаклизма. Живёт в `UI` — это `CanvasLayer`, поэтому будущая
+## прокрутка мира на него не влияет. Ради этого он и заведён: замах
+## видно только рядом с зевом, а знать о нём надо с любого края карты
+## (опасность №1 в `docs/decisions/ADR-006-horizontal-world.md`).
+##
+## Показывает время до УДАРА, а не до начала замаха. Разные катаклизмы
+## потребуют разных ответов и разного времени на них, поэтому «через
+## сколько начнётся» — число, с которым игроку нечего делать.
+func _update_cataclysm_label() -> void:
+	if _tell_left > 0.0:
+		_cataclysm_label.text = "%s — удар через %.1f с" % [_next_kind, _tell_left]
+		if not _label_alarm:
+			_label_alarm = true
+			_cataclysm_label.add_theme_color_override("font_color", Color(0.95, 0.55, 0.85, 1))
+		return
+	var left: float = _wave_timer.time_left + _abyss_stats.tell_duration
+	_cataclysm_label.text = "%s через %d с" % [_next_kind, int(ceilf(left))]
+	if _label_alarm:
+		_label_alarm = false
+		_cataclysm_label.add_theme_color_override("font_color", Color(0.72, 0.7, 0.66, 1))
 
 func _build_wave_arc(radius: float) -> void:
 	_build_arc(_volna, radius)

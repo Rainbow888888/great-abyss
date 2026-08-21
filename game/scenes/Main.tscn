@@ -78,6 +78,15 @@ offset_bottom = 76.0
 theme_override_colors/font_color = Color(0.79, 0.79, 0.74, 1)
 text = "Осколков в куче: 0"
 
+[node name="CataclysmLabel" type="Label" parent="./UI"]
+offset_left = 20.0
+offset_top = 84.0
+offset_right = 460.0
+offset_bottom = 114.0
+theme_override_colors/font_color = Color(0.72, 0.7, 0.66, 1)
+theme_override_font_sizes/font_size = 18
+text = ""
+
 [node name="ChronicleLabel" type="Label" parent="./UI"]
 visible = false
 offset_left = 300.0
